@@ -1,66 +1,63 @@
 ---
 name: ddd-review
-description: Revisa o codigo do projeto verificando aderencia ao DDD, bounded contexts, linguagem ubiqua e separacao de camadas. Use quando quiser validar a arquitetura ou antes de um PR.
-allowed-tools: "Read Grep Glob"
-context: fork
-agent: Explore
+description: Reviews the project code checking adherence to DDD, bounded contexts, ubiquitous language, and layer separation. Use to validate the architecture or before a PR.
 ---
 
-# Revisao DDD
+# DDD Review
 
-Analise o codigo-fonte do projeto e verifique a aderencia aos principios de Domain-Driven Design.
+Analyze the project source code and verify adherence to Domain-Driven Design principles.
 
-## O que verificar
+## What to verify
 
-Leia o `CLAUDE.md` para entender os bounded contexts, linguagem ubiqua e convencoes.
+Read `CLAUDE.md` to understand the bounded contexts, ubiquitous language, and conventions.
 
-### 1. Separacao de Camadas
+### 1. Layer Separation
 
-Para cada modulo em `src/`, verifique:
-- **Domain** — entidades, value objects e interfaces de repositorio NAO devem importar de infrastructure
-- **Application** — services/use cases dependem apenas do dominio (interfaces), nunca de implementacoes concretas
-- **Infrastructure** — controllers, DTOs e repositorios Prisma implementam interfaces do dominio
+For each module in `src/`, verify:
+- **Domain** — entities, value objects, and repository interfaces MUST NOT import from infrastructure
+- **Application** — services/use cases depend only on the domain (interfaces), never on concrete implementations
+- **Infrastructure** — controllers, DTOs, and Prisma repositories implement domain interfaces
 
-Reporte violacoes de dependencia entre camadas.
+Report dependency violations between layers.
 
-### 2. Linguagem Ubiqua
+### 2. Ubiquitous Language
 
-Verifique se o codigo usa os termos corretos:
-- `OrdemDeServico` (nao "ServiceOrder", "ticket", "order")
-- `Produto` (nao "peca", "part", "item")
+Verify the code uses the correct terms:
+- `OrdemDeServico` (not "ServiceOrder", "ticket", "order")
+- `Produto` (not "peca", "part", "item")
 - `Cliente`, `Veiculo`, `Servico`
-- Status da OS como enum com valores corretos
+- OS status as enum with correct values
 
 ### 3. Bounded Contexts
 
-Verifique se modulos nao vazam responsabilidades:
-- Atendimento nao deve manipular estoque diretamente
-- Estoque nao deve conhecer detalhes da OS
-- Comunicacao entre contexts deve ser via eventos ou interfaces
+Verify modules don't leak responsibilities:
+- Atendimento must not manipulate inventory directly
+- Estoque must not know OS details
+- Communication between contexts should be via events or interfaces
 
 ### 4. Value Objects
 
-Verifique se validacoes de dominio estao encapsuladas:
-- CPF/CNPJ — validacao no value object, nao no controller
-- Placa — formato brasileiro antigo e Mercosul
-- Precos — valores positivos
-- Status — transicoes validas (maquina de estados)
+Verify domain validations are encapsulated:
+- CPF/CNPJ — validation in the value object, not in the controller
+- Placa — Brazilian old and Mercosul formats
+- Prices — positive values
+- Status — valid transitions (state machine)
 
 ### 5. Aggregates
 
-Verifique se OrdemDeServico e o aggregate root e controla a consistencia dos seus filhos (itens de servico, itens de produto).
+Verify OrdemDeServico is the aggregate root and controls the consistency of its children (service items, product items).
 
-## Formato do report
+## Report format
 
 ```
-## Resumo DDD
+## DDD Summary
 
-### Aderencia por modulo
-- [modulo]: OK | Problemas encontrados
+### Adherence by module
+- [module]: OK | Issues found
 
-### Violacoes encontradas
-1. [arquivo:linha] — descricao e sugestao de correcao
+### Violations found
+1. [file:line] — description and fix suggestion
 
-### Sugestoes de melhoria
+### Improvement suggestions
 - ...
 ```

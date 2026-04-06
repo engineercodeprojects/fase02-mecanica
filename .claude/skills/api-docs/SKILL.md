@@ -1,33 +1,32 @@
 ---
 name: api-docs
-description: Gera ou atualiza a documentacao Swagger dos endpoints de um modulo. Use apos implementar controllers ou quando precisar documentar APIs.
-argument-hint: "[modulo]"
-allowed-tools: "Read Write Edit Grep Glob"
+description: Generates or updates Swagger documentation for a module's endpoints. Use after implementing controllers or when you need to document APIs.
+argument-hint: "[module]"
 ---
 
-# Documentacao de API (Swagger)
+# API Documentation (Swagger)
 
-Documente os endpoints do modulo **$ARGUMENTS**.
+Document the endpoints for the **$ARGUMENTS** module.
 
-## Passo 1 — Identificar endpoints
+## Step 1 — Identify endpoints
 
-Encontre todos os controllers em `src/$ARGUMENTS/` (ou busque se o caminho for diferente):
+Find all controllers in `src/$ARGUMENTS/` (or search if the path differs):
 ```!
-find src -name "*.controller.ts" -path "*$ARGUMENTS*" 2>/dev/null || echo "Busque manualmente"
+find src -name "*.controller.ts" -path "*$ARGUMENTS*" 2>/dev/null || echo "Search manually"
 ```
 
-## Passo 2 — Adicionar decorators Swagger
+## Step 2 — Add Swagger decorators
 
-Para cada endpoint, garanta que tenha:
+For each endpoint, ensure it has:
 
 ```typescript
-@ApiTags('modulo')           // agrupamento
-@ApiOperation({ summary })   // descricao da operacao
-@ApiResponse({ status, description, type })  // respostas possiveis
-@ApiParam / @ApiQuery        // parametros documentados
+@ApiTags('module')              // grouping
+@ApiOperation({ summary })      // operation description
+@ApiResponse({ status, description, type })  // possible responses
+@ApiParam / @ApiQuery           // documented parameters
 ```
 
-Para cada DTO:
+For each DTO:
 ```typescript
 @ApiProperty({
   description: '...',
@@ -36,22 +35,22 @@ Para cada DTO:
 })
 ```
 
-## Passo 3 — Exemplos
+## Step 3 — Examples
 
-Adicione exemplos realistas nos DTOs:
+Add realistic examples to DTOs:
 - CPF: `'123.456.789-09'`
 - CNPJ: `'12.345.678/0001-90'`
-- Placa: `'ABC1D23'`
-- Precos: `149.90`
-- Status OS: `'RECEBIDA'`
+- License plate: `'ABC1D23'`
+- Prices: `149.90`
+- OS Status: `'RECEBIDA'`
 
-## Passo 4 — Verificar
+## Step 4 — Verify
 
-- O Swagger deve estar configurado no `main.ts` (se nao estiver, configure)
-- Cada grupo de endpoints deve ter um tag descritivo
-- Rotas protegidas devem ter `@ApiBearerAuth()`
+- Swagger must be configured in `main.ts` (if not, configure it)
+- Each endpoint group should have a descriptive tag
+- Protected routes must have `@ApiBearerAuth()`
 
-Liste todos os endpoints documentados no formato:
+List all documented endpoints in the format:
 ```
-[METODO] /rota — descricao
+[METHOD] /route — description
 ```

@@ -1,34 +1,34 @@
-# Sistema Integrado de Oficina Mecanica - Tech Challenge FIAP
+# Auto Repair Shop Integrated System - Tech Challenge FIAP
 
-## Sobre o projeto
+## About the project
 
-MVP do back-end de um sistema para oficina mecanica de medio porte, com foco em gestao de ordens de servico, clientes, veiculos e pecas. Desenvolvido em NestJS com Domain-Driven Design (DDD), PostgreSQL via Prisma ORM.
+Back-end MVP for a mid-size auto repair shop system, focused on service order management, clients, vehicles, and parts. Built with NestJS using Domain-Driven Design (DDD), PostgreSQL via Prisma ORM.
 
 **Stack:** NestJS + TypeScript + Prisma + PostgreSQL + Docker
-**Arquitetura:** Monolito em camadas seguindo DDD tatico
+**Architecture:** Layered monolith following tactical DDD
 
-## Documentacao DDD (Miro)
+## DDD Documentation (Miro)
 
-O Event Storming completo esta no board do Miro (ID: `uXjVGwyI88w=`).
-A versao mais recente e o **Event Storming v3 (30/03)**.
+The full Event Storming is on the Miro board (ID: `uXjVGwyI88w=`).
+The latest version is **Event Storming v3 (30/03)**.
 
 ### Bounded Contexts
 
 - **Atendimento** — Cliente, Veiculo, OrdemDeServico (aggregate root)
 - **Catalogo** — Servico
-- **Estoque** — Produto (pecas e insumos), movimentacoes
+- **Estoque** — Produto (parts and supplies), stock movements
 - **Autenticacao** — Usuario, JWT
-- **Notificacao** — envio de alertas ao cliente
+- **Notificacao** — client alert delivery
 
-### Atores
+### Actors
 
-- **Cliente** — aprova/recusa orcamento, acompanha OS
-- **Atendente** — cadastra cliente, abre OS, entrega veiculo
-- **Mecanico** — diagnostica, adiciona servicos/produtos, executa
-- **Gestor** — gerencia catalogos, monitora KPIs
-- **Sistema** — calcula orcamento, transiciona status, notifica
+- **Cliente** — approves/rejects budget, tracks OS
+- **Atendente** — registers client, opens OS, delivers vehicle
+- **Mecanico** — diagnoses, adds services/products, executes
+- **Gestor** — manages catalogs, monitors KPIs
+- **Sistema** — calculates budget, transitions status, notifies
 
-### Fluxo da Ordem de Servico (maquina de estados)
+### Service Order Flow (state machine)
 
 ```
 RECEBIDA -> EM_DIAGNOSTICO -> AGUARDANDO_APROVACAO -> EM_EXECUCAO -> FINALIZADA -> ENTREGUE
@@ -37,82 +37,97 @@ RECEBIDA -> EM_DIAGNOSTICO -> AGUARDANDO_APROVACAO -> EM_EXECUCAO -> FINALIZADA 
                                   CANCELADA
 ```
 
-**Transicoes automaticas (Policies):**
-- Mecanico se atribui a OS -> status muda para EM_DIAGNOSTICO
-- Mecanico conclui orcamento -> AGUARDANDO_APROVACAO + notifica cliente
-- Cliente aprova -> EM_EXECUCAO
-- Cliente recusa -> CANCELADA + estorna reservas de estoque
-- Todos servicos concluidos -> FINALIZADA
-- Ao iniciar execucao -> baixa dos produtos no estoque
+**Automatic transitions (Policies):**
+- Mechanic assigns themselves to OS -> status changes to EM_DIAGNOSTICO
+- Mechanic completes budget -> AGUARDANDO_APROVACAO + notifies client
+- Client approves -> EM_EXECUCAO
+- Client rejects -> CANCELADA + reverses inventory reservations
+- All services completed -> FINALIZADA
+- When execution starts -> inventory deduction for products
 
 ## User Stories
 
-As user stories estao em `docs/user-stories/` e tambem no board do Notion (Tech Challenge Board).
+User stories are in `docs/user-stories/` and also on the Notion board (Tech Challenge Board).
 
-### Sprint 1 — Fundacao + CRUDs independentes (19 SP)
+### Sprint 1 — Foundation + Independent CRUDs (19 SP)
 
-| # | Story | SP | Modulo |
+| # | Story | SP | Module |
 |---|---|---|---|
-| US-00 | Setup Prisma + PostgreSQL | 5 | Infraestrutura |
-| US-21 | Docker e Infraestrutura | 3 | Infraestrutura |
-| US-01 | Cadastro de Cliente | 3 | Atendimento |
-| US-04 | Catalogo de Servicos | 3 | Catalogo |
-| US-05 | Catalogo de Produtos | 5 | Estoque |
+| US-00 | Setup Prisma + PostgreSQL | 5 | Infrastructure |
+| US-21 | Docker and Infrastructure | 3 | Infrastructure |
+| US-01 | Client Registration | 3 | Atendimento |
+| US-04 | Service Catalog | 3 | Catalogo |
+| US-05 | Product Catalog | 5 | Estoque |
 
-### Sprint 2 — CRUD complementar + Abertura da OS
+### Sprint 2 — Complementary CRUD + OS Opening
 
-| # | Story | SP | Modulo |
+| # | Story | SP | Module |
 |---|---|---|---|
-| US-02 | CRUD Completo de Cliente | 3 | Atendimento |
-| US-03 | Cadastro de Veiculo | 3 | Atendimento |
-| US-06 | Abertura de Ordem de Servico | 5 | Atendimento |
-| US-19 | Autenticacao JWT | 5 | Autenticacao |
+| US-02 | Full Client CRUD | 3 | Atendimento |
+| US-03 | Vehicle Registration | 3 | Atendimento |
+| US-06 | Service Order Opening | 5 | Atendimento |
+| US-19 | JWT Authentication | 5 | Autenticacao |
 
-### Sprint 3 — Fluxo da OS (diagnostico ate aprovacao)
+### Sprint 3 — OS Flow (diagnosis to approval)
 
-| # | Story | SP | Modulo |
+| # | Story | SP | Module |
 |---|---|---|---|
-| US-07 | Atribuir Mecanico a OS | 2 | Atendimento |
-| US-08 | Diagnostico | 3 | Atendimento |
-| US-09 | Adicionar Servicos a OS | 3 | Atendimento |
-| US-10 | Adicionar Produtos a OS | 5 | Atendimento + Estoque |
-| US-11 | Calculo Automatico do Orcamento | 3 | Atendimento |
-| US-12 | Concluir e Enviar Orcamento | 3 | Atendimento |
+| US-07 | Assign Mechanic to OS | 2 | Atendimento |
+| US-08 | Diagnosis | 3 | Atendimento |
+| US-09 | Add Services to OS | 3 | Atendimento |
+| US-10 | Add Products to OS | 5 | Atendimento + Estoque |
+| US-11 | Automatic Budget Calculation | 3 | Atendimento |
+| US-12 | Complete and Send Budget | 3 | Atendimento |
 
-### Sprint 4 — Execucao, entrega e complementos
+### Sprint 4 — Execution, delivery, and extras
 
-| # | Story | SP | Modulo |
+| # | Story | SP | Module |
 |---|---|---|---|
-| US-13 | Aprovacao/Rejeicao do Orcamento | 5 | Atendimento |
-| US-14 | Execucao dos Servicos | 5 | Atendimento |
-| US-15 | Finalizacao e Entrega | 2 | Atendimento |
-| US-16 | Acompanhamento da OS pelo Cliente | 3 | Atendimento |
-| US-18 | Controle de Estoque | 5 | Estoque |
+| US-13 | Budget Approval/Rejection | 5 | Atendimento |
+| US-14 | Service Execution | 5 | Atendimento |
+| US-15 | Completion and Delivery | 2 | Atendimento |
+| US-16 | Client OS Tracking | 3 | Atendimento |
+| US-18 | Inventory Control | 5 | Estoque |
 
-### Sprint 5 — Monitoramento, testes e finalizacao
+### Sprint 5 — Monitoring, tests, and finalization
 
-| # | Story | SP | Modulo |
+| # | Story | SP | Module |
 |---|---|---|---|
-| US-17 | Listagem de OS + Monitoramento de tempo medio | 5 | Atendimento |
-| US-20 | Notificacao ao Cliente | 3 | Notificacao |
-| US-22 | Testes Automatizados (cobertura 80%) | 8 | Todos |
-| US-23 | Documentacao Swagger | 2 | Todos |
+| US-17 | OS Listing + Average Time Monitoring | 5 | Atendimento |
+| US-20 | Client Notification | 3 | Notificacao |
+| US-22 | Automated Tests (80% coverage) | 8 | All |
+| US-23 | Swagger Documentation | 2 | All |
 
-## Como trabalhar com as user stories
+## Working with user stories
 
-Ao iniciar uma tarefa, leia o arquivo correspondente em `docs/user-stories/` para contexto completo.
+When starting a task, read the corresponding file in `docs/user-stories/` for full context.
 
-Exemplo:
-- "Implemente a US-06" -> leia `docs/user-stories/06-abertura-os.md` e siga os criterios de aceite
-- "Qual a proxima tarefa?" -> consulte a sprint atual na tabela acima
+Example:
+- "Implement US-06" -> read `docs/user-stories/06-abertura-os.md` and follow the acceptance criteria
+- "What's the next task?" -> check the current sprint in the table above
 
-Cada user story contem:
-- **User story** no formato "Como [ator], quero [acao], para que [beneficio]"
-- **Criterios de aceite** como checklist
-- **DDD Domain** e **DDD Layer** indicando onde implementar
-- **Story Points** e **Prioridade**
+Each user story contains:
+- **User story** in the format "As [actor], I want [action], so that [benefit]"
+- **Acceptance criteria** as a checklist
+- **DDD Domain** and **DDD Layer** indicating where to implement
+- **Story Points** and **Priority**
 
-## Estrutura esperada do projeto (apos Sprint 1)
+## QA Plan (mandatory)
+
+Every User Story must have a corresponding **QA_PLAN** document in `docs/qa-plans/`. The QA Plan documents how to test the story and ensures all acceptance criteria are validated.
+
+- **Format:** `docs/qa-plans/QA_PLAN_US-XX.md`
+- **When to create:** after implementing the story, use the `/qa-plan XX` skill
+- **Required content:**
+  - Summary of what is being tested
+  - Prerequisites (environment, data, configurations)
+  - Test scenarios with detailed steps for each acceptance criterion
+  - Edge cases (invalid inputs, boundary values)
+  - Traceability table (acceptance criterion -> test scenarios)
+  - Validation checklist
+- **Rule:** each acceptance criterion must have at least one corresponding test scenario
+
+## Expected project structure (after Sprint 1)
 
 ```
 src/
@@ -133,24 +148,24 @@ src/
 │       ├── dto/
 │       └── prisma-cliente.repository.ts
 ├── servico/
-│   └── ...  (mesma estrutura)
+│   └── ...  (same structure)
 └── produto/
-    └── ...  (mesma estrutura)
+    └── ...  (same structure)
 ```
 
-## Convencoes
+## Conventions
 
-- **Linguagem Ubiqua** — usar termos do dominio: OrdemDeServico (nao "ticket"), Produto (nao "peca"), Cliente, Veiculo
-- **Validacoes** — CPF/CNPJ e placa devem ser validados no dominio (Value Objects)
-- **Status da OS** — usar enum: RECEBIDA, EM_DIAGNOSTICO, AGUARDANDO_APROVACAO, EM_EXECUCAO, FINALIZADA, ENTREGUE, CANCELADA
-- **APIs** — RESTful, documentadas com Swagger decorators
-- **Banco** — PostgreSQL, justificativa: suporte robusto a transacoes ACID, tipos de dados ricos, maturidade
-- **Testes** — cobertura minima de 80% nos dominios criticos
+- **Ubiquitous Language** — use domain terms: OrdemDeServico (not "ticket"), Produto (not "peca"), Cliente, Veiculo
+- **Validations** — CPF/CNPJ and license plate must be validated in the domain (Value Objects)
+- **OS Status** — use enum: RECEBIDA, EM_DIAGNOSTICO, AGUARDANDO_APROVACAO, EM_EXECUCAO, FINALIZADA, ENTREGUE, CANCELADA
+- **APIs** — RESTful, documented with Swagger decorators
+- **Database** — PostgreSQL, rationale: robust ACID transaction support, rich data types, maturity
+- **Tests** — minimum 80% coverage on critical domains
 
-## MCP Servers disponiveis
+## Available MCP Servers
 
-- **Notion** — criar/ler/atualizar tarefas no board "Tech Challenge Board"
-- **Miro** — ler o Event Storming do board `uXjVGwyI88w=`
+- **Notion** — create/read/update tasks on the "Tech Challenge Board"
+- **Miro** — read the Event Storming from board `uXjVGwyI88w=`
 
 Database Notion ID: `33a48f0b-bca5-805d-ac88-ed5a914239b0`
 Data Source ID: `33a48f0b-bca5-8071-a6bd-000bcbd098d7`

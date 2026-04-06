@@ -1,42 +1,41 @@
 ---
 name: prisma-schema
-description: Cria ou atualiza o schema Prisma para uma entidade do dominio. Gera o model, relacoes e migration. Use quando precisar adicionar tabelas ao banco.
-argument-hint: "[entidade]"
-allowed-tools: "Read Write Edit Bash Grep Glob"
+description: Creates or updates the Prisma schema for a domain entity. Generates the model, relations, and migration. Use when you need to add tables to the database.
+argument-hint: "[entity]"
 ---
 
 # Prisma Schema
 
-Adicione ou atualize o model Prisma para a entidade **$ARGUMENTS**.
+Add or update the Prisma model for the **$ARGUMENTS** entity.
 
-## Passo 1 — Contexto
+## Step 1 — Context
 
-Leia o `CLAUDE.md` para entender o dominio e as relacoes entre entidades.
-Leia `prisma/schema.prisma` para ver o estado atual do schema.
+Read `CLAUDE.md` to understand the domain and relationships between entities.
+Read `prisma/schema.prisma` to see the current schema state.
 
-## Passo 2 — Definir o Model
+## Step 2 — Define the Model
 
-Crie o model seguindo as convencoes:
+Create the model following these conventions:
 
 ```prisma
-model NomeDaEntidade {
+model EntityName {
   id        String   @id @default(uuid())
-  // campos do dominio
+  // domain fields
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@map("nome_da_tabela")  // snake_case para tabela
+  @@map("table_name")  // snake_case for table
 }
 ```
 
-Convencoes:
-- **ID** — UUID como string
-- **Timestamps** — createdAt e updatedAt em toda tabela
-- **Relacoes** — use `@relation` explicito com onDelete definido
-- **Enums** — use Prisma enum para Status da OS
-- **Map** — campos camelCase no Prisma, snake_case na tabela (`@map`)
+Conventions:
+- **ID** — UUID as string
+- **Timestamps** — createdAt and updatedAt on every table
+- **Relations** — use explicit `@relation` with onDelete defined
+- **Enums** — use Prisma enum for OS Status
+- **Map** — camelCase fields in Prisma, snake_case in the table (`@map`)
 
-## Passo 3 — Relacoes esperadas
+## Step 3 — Expected Relations
 
 ```
 Cliente 1---N Veiculo
@@ -49,15 +48,15 @@ Produto 1---N ItemProduto
 Produto 1---N MovimentacaoEstoque
 ```
 
-## Passo 4 — Migration
+## Step 4 — Migration
 
 ```bash
 npx prisma migrate dev --name add-$ARGUMENTS
 npx prisma generate
 ```
 
-## Passo 5 — Verificar
+## Step 5 — Verify
 
-- `npx prisma validate` deve passar
-- Conferir que relacoes estao corretas
-- Listar models criados/alterados
+- `npx prisma validate` must pass
+- Confirm relations are correct
+- List created/modified models

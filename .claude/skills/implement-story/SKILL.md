@@ -1,64 +1,63 @@
 ---
 name: implement-story
-description: Implementa uma User Story do backlog. Use quando o usuario pedir para implementar uma US (ex. "implemente a US-06"). Le a story, segue os criterios de aceite e estrutura DDD do projeto.
-argument-hint: "[numero-da-story]"
-allowed-tools: "Read Write Edit Bash Grep Glob"
+description: Implements a User Story from the backlog. Use when the user asks to implement a US (e.g. "implement US-06"). Reads the story, follows acceptance criteria, and uses the project's DDD structure.
+argument-hint: "[story-number]"
 ---
 
-# Implementar User Story
+# Implement User Story
 
-Voce vai implementar a User Story **US-$ARGUMENTS**.
+You will implement User Story **US-$ARGUMENTS**.
 
-## Passo 1 — Contexto
+## Step 1 — Context
 
-Leia os seguintes arquivos para entender o contexto:
-- `docs/user-stories/$ARGUMENTS*.md` (use glob para encontrar o arquivo exato)
-- `CLAUDE.md` para convencoes e estrutura do projeto
+Read the following files to understand the context:
+- `docs/user-stories/$ARGUMENTS*.md` (use glob to find the exact file)
+- `CLAUDE.md` for conventions and project structure
 
-## Passo 2 — Planejamento
+## Step 2 — Planning
 
-Antes de codar, apresente ao usuario:
-1. Quais arquivos serao criados/modificados
-2. Quais entidades/value objects do dominio estao envolvidos
-3. Quais dependencias precisam ser instaladas (se houver)
-4. Estimativa de arquivos a criar
+Before coding, present to the user:
+1. Which files will be created/modified
+2. Which domain entities/value objects are involved
+3. Which dependencies need to be installed (if any)
+4. Estimated number of files to create
 
-Aguarde confirmacao do usuario antes de prosseguir.
+Wait for user confirmation before proceeding.
 
-## Passo 3 — Implementacao
+## Step 3 — Implementation
 
-Siga a estrutura DDD do projeto (veja CLAUDE.md):
+Follow the project's DDD structure (see CLAUDE.md):
 
 ```
-src/<modulo>/
-├── domain/           # Entidades, Value Objects, interfaces de repositorio
+src/<module>/
+├── domain/           # Entities, Value Objects, repository interfaces
 ├── application/      # Services, Use Cases
-└── infrastructure/   # Controllers, DTOs, implementacao do repositorio Prisma
+└── infrastructure/   # Controllers, DTOs, Prisma repository implementation
 ```
 
-Regras:
-- Use a linguagem ubiqua definida no CLAUDE.md (OrdemDeServico, Produto, etc.)
-- Validacoes de dominio nos Value Objects (CPF/CNPJ, Placa, etc.)
-- Status da OS como enum: RECEBIDA, EM_DIAGNOSTICO, AGUARDANDO_APROVACAO, EM_EXECUCAO, FINALIZADA, ENTREGUE, CANCELADA
-- Controllers com decorators Swagger
-- DTOs com class-validator
-- Registre o modulo no app.module.ts
+Rules:
+- Use the ubiquitous language defined in CLAUDE.md (OrdemDeServico, Produto, etc.)
+- Domain validations in Value Objects (CPF/CNPJ, Placa, etc.)
+- OS status as enum: RECEBIDA, EM_DIAGNOSTICO, AGUARDANDO_APROVACAO, EM_EXECUCAO, FINALIZADA, ENTREGUE, CANCELADA
+- Controllers with Swagger decorators
+- DTOs with class-validator
+- Register the module in app.module.ts
 
-## Passo 4 — Prisma Schema
+## Step 4 — Prisma Schema
 
-Se a story exigir novas tabelas:
-1. Adicione os models ao `prisma/schema.prisma`
-2. Gere a migration: `npx prisma migrate dev --name <descricao>`
+If the story requires new tables:
+1. Add models to `prisma/schema.prisma`
+2. Generate migration: `npx prisma migrate dev --name <description>`
 
-## Passo 5 — Verificacao
+## Step 5 — Verification
 
-- Rode `npx tsc --noEmit` para verificar compilacao
-- Se testes forem exigidos nos criterios de aceite, implemente-os
-- Liste os criterios de aceite atendidos vs pendentes
+- Run `npx tsc --noEmit` to check compilation
+- If tests are required by acceptance criteria, implement them
+- List acceptance criteria met vs pending
 
-## Passo 6 — Resumo
+## Step 6 — Summary
 
-No final, apresente:
-- Arquivos criados/modificados
-- Criterios de aceite atendidos (checklist)
-- Proximos passos ou dependencias com outras stories
+At the end, present:
+- Files created/modified
+- Acceptance criteria met (checklist)
+- Next steps or dependencies with other stories

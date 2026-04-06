@@ -1,65 +1,64 @@
 ---
 name: api-test
-description: Cria testes unitarios e de integracao para um modulo. Use apos implementar uma feature ou quando precisar aumentar cobertura. Foca nos dominios criticos com meta de 80%.
-argument-hint: "[modulo]"
-allowed-tools: "Read Write Edit Bash Grep Glob"
+description: Creates unit and integration tests for a module. Use after implementing a feature or when you need to increase coverage. Focuses on critical domains with a target of 80%.
+argument-hint: "[module]"
 ---
 
-# Testes de API
+# Module Tests
 
-Crie testes para o modulo **$ARGUMENTS**.
+Create tests for the **$ARGUMENTS** module.
 
-## Passo 1 — Analisar o que testar
+## Step 1 — Analyze what to test
 
-Leia os arquivos do modulo em `src/$ARGUMENTS/` e identifique:
+Read the module files in `src/$ARGUMENTS/` and identify:
 
-1. **Domain** — entidades, value objects, regras de negocio
-2. **Application** — services, use cases, fluxos
-3. **Infrastructure** — controllers (e2e), DTOs (validacao)
+1. **Domain** — entities, value objects, business rules
+2. **Application** — services, use cases, flows
+3. **Infrastructure** — controllers (e2e), DTOs (validation)
 
-## Passo 2 — Testes Unitarios (Domain + Application)
+## Step 2 — Unit Tests (Domain + Application)
 
-Crie em `src/$ARGUMENTS/**/*.spec.ts`:
+Create in `src/$ARGUMENTS/**/*.spec.ts`:
 
 ### Value Objects
 ```typescript
 describe('CpfCnpj', () => {
-  it('deve aceitar CPF valido', () => { ... });
-  it('deve rejeitar CPF invalido', () => { ... });
-  it('deve aceitar CNPJ valido', () => { ... });
+  it('should accept a valid CPF', () => { ... });
+  it('should reject an invalid CPF', () => { ... });
+  it('should accept a valid CNPJ', () => { ... });
 });
 ```
 
-### Entidades
-- Criacao com dados validos
-- Criacao com dados invalidos (deve lancar erro)
-- Transicoes de estado validas e invalidas
+### Entities
+- Creation with valid data
+- Creation with invalid data (should throw error)
+- Valid and invalid state transitions
 
 ### Services
-- Mock dos repositorios (interface do dominio)
-- Testar fluxos de sucesso
-- Testar casos de erro (not found, estado invalido, duplicata)
+- Mock repositories (domain interface)
+- Test success flows
+- Test error cases (not found, invalid state, duplicate)
 
-## Passo 3 — Testes de Integracao (se aplicavel)
+## Step 3 — Integration Tests (if applicable)
 
-Para fluxos criticos (OS, estoque), crie testes e2e:
-- Use `@nestjs/testing` com `Test.createTestingModule`
-- Teste o fluxo completo via HTTP (supertest)
-- Valide respostas, status codes e side effects
+For critical flows (OS, inventory), create e2e tests:
+- Use `@nestjs/testing` with `Test.createTestingModule`
+- Test the full flow via HTTP (supertest)
+- Validate responses, status codes, and side effects
 
-## Passo 4 — Executar
+## Step 4 — Run
 
 ```bash
-# Rodar testes do modulo
+# Run module tests
 npx jest --testPathPattern=$ARGUMENTS --verbose
 
-# Verificar cobertura
+# Check coverage
 npx jest --testPathPattern=$ARGUMENTS --coverage
 ```
 
-## Passo 5 — Relatorio
+## Step 5 — Report
 
-Apresente:
-- Quantos testes criados (unitarios vs integracao)
-- Cobertura atingida (meta: 80% nos dominios criticos)
-- Gaps de cobertura restantes
+Present:
+- How many tests were created (unit vs integration)
+- Coverage achieved (target: 80% on critical domains)
+- Remaining coverage gaps
