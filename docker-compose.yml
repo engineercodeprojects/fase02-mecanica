@@ -1,0 +1,28 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: oficina_mecanica_db
+    restart: unless-stopped
+    ports:
+      - '5432:5432'
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: oficina_mecanica
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  app:
+    build: .
+    container_name: oficina_mecanica_app
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/oficina_mecanica?schema=public
+    depends_on:
+      - postgres
+    entrypoint: ['sh', '-c', 'npx prisma migrate deploy && node dist/main.js']
+
+volumes:
+  pgdata:
