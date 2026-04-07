@@ -1,0 +1,130 @@
+// Auto Repair Shop - Entity Relationship Diagram
+// Import this file at https://dbdiagram.io
+
+Project oficina_mecanica {
+  database_type: 'PostgreSQL'
+  Note: 'Sistema Integrado de Oficina Mecanica - Tech Challenge FIAP'
+}
+
+Enum StatusOrdemDeServico {
+  RECEBIDA
+  EM_DIAGNOSTICO
+  AGUARDANDO_APROVACAO
+  EM_EXECUCAO
+  FINALIZADA
+  ENTREGUE
+  CANCELADA
+}
+
+Table cliente {
+  id uuid [pk, default: `uuid_generate_v4()`]
+  nome varchar [not null]
+  cpf_cnpj varchar [unique, not null, note: 'CPF or CNPJ, validated in domain']
+  email varchar [unique]
+  telefone varchar
+  endereco varchar
+  created_at timestamp [default: `now()`]
+  updated_at timestamp
+}
+
+Table veiculo {
+  id uuid [pk, default: `uuid_generate_v4()`]
+  cliente_id uuid [not null, ref: > cliente.id]
+  placa varchar [unique, not null, note: 'Brazilian plate: old or Mercosul format']
+  marca varchar [not null]
+  modelo varchar [not null]
+  ano int
+  cor varchar
+  created_at timestamp [default: `now()`]
+  updated_at timestamp
+}
+
+Table servico {
+  id uuid [pk, default: `uuid_generate_v4()`]
+  nome varchar [not null]
+  descricao text
+  preco decimal [not null, note: 'Positive value']
+  ativo boolean [default: true]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp
+}
+
+Table produto {
+  id uuid [pk, default: `uuid_generate_v4()`]
+  nome varchar [not null]
+  descricao text
+  preco decimal [not null, note: 'Positive value']
+  quantidade_estoque int [not null, default: 0]
+  estoque_minimo int [default: 0]
+  ativo boolean [default: true]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp
+}
+
+Table ordem_de_servico {
+  id uuid [pk, default: `uuid_generate_v4()`]
+  cliente_id uuid [not null, ref: > cliente.id]
+  veiculo_id uuid [not null, ref: > veiculo.id]
+  mecanico_id uuid [ref: > usuario.id]
+  status StatusOrdemDeServico [not null, default: 'RECEBIDA']
+  diagnostico text
+  observacoes text
+  valor_total decimal [default: 0]
+  data_abertura timestamp [default: `now()`]
+  data_finalizacao timestamp
+  data_entrega timestamp
+  created_at timestamp [default: `now()`]
+  updated_at timestamp
+}
+
+Table ordem_de_servico_servico {
+  id uuid [pk, default: `uuid_generate_v4()`]
+  ordem_de_servico_id uuid [not null, ref: > ordem_de_servico.id]
+  servico_id uuid [not null, ref: > servico.id]
+  preco_cobrado decimal [not null, note: 'Price at the time of OS creation']
+  concluido boolean [default: false]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp
+}
+
+Table ordem_de_servico_servico_produto {
+  id uuid [pk, default: `uuid_generate_v4()`]
+  ordem_de_servico_servico_id uuid [not null, ref: > ordem_de_servico_servico.id]
+  produto_id uuid [not null, ref: > produto.id]
+  quantidade int [not null]
+  preco_cobrado decimal [not null, note: 'Price at the time of OS creation']
+  created_at timestamp [default: `now()`]
+  updated_at timestamp
+}
+
+Table movimentacao_estoque {
+  id uuid [pk, default: `uuid_generate_v4()`]
+  produto_id uuid [not null, ref: > produto.id]
+  tipo varchar [not null, note: 'ENTRADA or SAIDA']
+  quantidade int [not null]
+  motivo varchar
+  ordem_de_servico_id uuid [ref: > ordem_de_servico.id]
+  created_at timestamp [default: `now()`]
+}
+
+Table log_tempo_servico {
+  id uuid [pk, default: `uuid_generate_v4()`]
+  servico_id uuid [not null, ref: > servico.id]
+  mecanico_id uuid [not null, ref: > usuario.id]
+  ordem_servico_id uuid [ref: > ordem_de_servico.id]
+  inicio timestamp [not null]
+  fim timestamp
+  duracao_minutos int [note: 'Calculated from inicio/fim']
+  created_at timestamp [default: `now()`]
+}
+
+Table usuario {
+  id uuid [pk, default: `uuid_generate_v4()`]
+  nome varchar [not null]
+  email varchar [unique, not null]
+  senha_hash varchar [not null]
+  role varchar [not null, note: 'ATENDENTE, MECANICO, GESTOR']
+  ativo boolean [default: true]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp
+}
