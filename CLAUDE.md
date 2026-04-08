@@ -127,6 +127,10 @@ Every User Story must have a corresponding **QA_PLAN** document in `docs/qa-plan
   - Validation checklist
 - **Rule:** each acceptance criterion must have at least one corresponding test scenario
 
+## Entity Relationship Diagram
+
+The file `docs/schema.dbml` contains the full ER diagram in DBML format. It can be imported at [dbdiagram.io](https://dbdiagram.io) to visualize all table relationships. Use it as a reference when implementing new entities or modifying the Prisma schema.
+
 ## Expected project structure (after Sprint 1)
 
 ```
