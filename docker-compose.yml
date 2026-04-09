@@ -11,17 +11,24 @@ services:
       POSTGRES_DB: oficina_mecanica
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d oficina_mecanica']
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   app:
     build: .
     container_name: oficina_mecanica_app
     restart: unless-stopped
     ports:
-      - '3000:3000'
+      - '${PORT:-3000}:3000'
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/oficina_mecanica?schema=public
+      PORT: '${PORT:-3000}'
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     entrypoint: ['sh', '-c', 'npx prisma migrate deploy && node dist/main.js']
 
 volumes:
