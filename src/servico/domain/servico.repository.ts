@@ -14,6 +14,7 @@ export interface PaginatedResult<T> {
 }
 
 export interface ServicoRepository {
+  existsByNome(nome: string, excludeId?: string): Promise<boolean>;
   create(servico: Servico): Promise<Servico>;
   findById(id: string): Promise<Servico | null>;
   findAll(params: FindAllParams): Promise<PaginatedResult<Servico>>;
