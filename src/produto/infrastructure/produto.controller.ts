@@ -26,6 +26,7 @@ import { UpdateProdutoDto } from './dto/update-produto.dto';
 import { QueryProdutoDto } from './dto/query-produto.dto';
 import { AddStockDto } from './dto/add-stock.dto';
 import { DuplicateNameError } from '../domain/errors/duplicate-name.error';
+import { InsufficientStockError } from '../domain/errors/insufficient-stock.error';
 
 @ApiTags('Produtos')
 @Controller('produtos')
@@ -101,6 +102,35 @@ export class ProdutoController {
     @Body() dto: AddStockDto,
   ) {
     return this.toResponse(await this.service.addStock(id, dto.quantidade));
+  }
+
+  @Post(':id/reservar')
+  @ApiOperation({ summary: 'Reservar quantidade do estoque' })
+  @ApiOkResponse({ description: 'Reserva realizada com sucesso' })
+  @ApiNotFoundResponse({ description: 'Produto nao encontrado' })
+  async reserveStock(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AddStockDto,
+  ) {
+    try {
+      return this.toResponse(await this.service.reserveStock(id, dto.quantidade));
+    } catch (error) {
+      if (error instanceof InsufficientStockError) {
+        throw new ConflictException(error.message);
+      }
+      throw error;
+    }
+  }
+
+  @Post(':id/liberar')
+  @ApiOperation({ summary: 'Liberar quantidade reservada do estoque' })
+  @ApiOkResponse({ description: 'Liberacao realizada com sucesso' })
+  @ApiNotFoundResponse({ description: 'Produto nao encontrado' })
+  async releaseStock(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AddStockDto,
+  ) {
+    return this.toResponse(await this.service.releaseStock(id, dto.quantidade));
   }
 
   @Delete(':id')

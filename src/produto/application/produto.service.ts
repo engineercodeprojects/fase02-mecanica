@@ -7,6 +7,7 @@ import {
   PaginatedResult,
 } from '../domain/produto.repository';
 import { DuplicateNameError } from '../domain/errors/duplicate-name.error';
+import { InsufficientStockError } from '../domain/errors/insufficient-stock.error';
 
 @Injectable()
 export class ProdutoService {
@@ -60,6 +61,26 @@ export class ProdutoService {
       throw new NotFoundException(`Produto com id '${id}' nao encontrado`);
     }
     await this.repository.delete(id);
+  }
+
+  async reserveStock(id: string, quantity: number): Promise<Produto> {
+    const produto = await this.repository.findById(id);
+    if (!produto) {
+      throw new NotFoundException(`Produto com id '${id}' nao encontrado`);
+    }
+
+    produto.reserve(quantity);
+    return this.repository.update(produto);
+  }
+
+  async releaseStock(id: string, quantity: number): Promise<Produto> {
+    const produto = await this.repository.findById(id);
+    if (!produto) {
+      throw new NotFoundException(`Produto com id '${id}' nao encontrado`);
+    }
+
+    produto.release(quantity);
+    return this.repository.update(produto);
   }
 
   async addStock(id: string, quantity: number): Promise<Produto> {

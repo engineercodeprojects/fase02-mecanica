@@ -2,6 +2,7 @@ import { ProdutoService } from './produto.service';
 import { ProdutoRepository, PRODUTO_REPOSITORY } from '../domain/produto.repository';
 import { Produto } from '../domain/produto.entity';
 import { DuplicateNameError } from '../domain/errors/duplicate-name.error';
+import { InsufficientStockError } from '../domain/errors/insufficient-stock.error';
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 
@@ -166,6 +167,57 @@ describe('ProdutoService', () => {
 
       const result = await service.addStock('1', 20);
       expect(result.quantidadeEstoque).toBe(70);
+    });
+  });
+
+  describe('reserveStock', () => {
+    it('should reserve stock successfully', async () => {
+      const produto = Produto.reconstitute({
+        id: '1', nome: 'Filtro', descricao: null, precoUnitario: 30,
+        quantidadeEstoque: 50, quantidadeReservada: 0, estoqueMinimo: 10, ativo: true,
+      });
+      mockRepository.findById.mockResolvedValue(produto);
+      mockRepository.update.mockImplementation(async (p) => p);
+
+      const result = await service.reserveStock('1', 10);
+      expect(result.quantidadeReservada).toBe(10);
+      expect(result.quantidadeDisponivel).toBe(40);
+    });
+
+    it('should throw InsufficientStockError when exceeding available', async () => {
+      const produto = Produto.reconstitute({
+        id: '1', nome: 'Filtro', descricao: null, precoUnitario: 30,
+        quantidadeEstoque: 10, quantidadeReservada: 0, estoqueMinimo: 5, ativo: true,
+      });
+      mockRepository.findById.mockResolvedValue(produto);
+
+      await expect(service.reserveStock('1', 11)).rejects.toThrow(InsufficientStockError);
+      expect(mockRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('should throw NotFoundException when not found', async () => {
+      mockRepository.findById.mockResolvedValue(null);
+      await expect(service.reserveStock('999', 5)).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('releaseStock', () => {
+    it('should release reserved stock', async () => {
+      const produto = Produto.reconstitute({
+        id: '1', nome: 'Filtro', descricao: null, precoUnitario: 30,
+        quantidadeEstoque: 50, quantidadeReservada: 10, estoqueMinimo: 10, ativo: true,
+      });
+      mockRepository.findById.mockResolvedValue(produto);
+      mockRepository.update.mockImplementation(async (p) => p);
+
+      const result = await service.releaseStock('1', 5);
+      expect(result.quantidadeReservada).toBe(5);
+      expect(result.quantidadeDisponivel).toBe(45);
+    });
+
+    it('should throw NotFoundException when not found', async () => {
+      mockRepository.findById.mockResolvedValue(null);
+      await expect(service.releaseStock('999', 5)).rejects.toThrow(NotFoundException);
     });
   });
 });

@@ -155,6 +155,132 @@ describe('PrismaProdutoRepository (integration)', () => {
     });
   });
 
+  describe('stock operations (reserve, release, deduct, addStock)', () => {
+    it('should persist reserved quantity', async () => {
+      const created = await repository.create(
+        Produto.create({ nome: 'Filtro', precoUnitario: 30, quantidadeEstoque: 50, estoqueMinimo: 10 }),
+      );
+
+      created.reserve(10);
+      const updated = await repository.update(created);
+
+      expect(updated.quantidadeReservada).toBe(10);
+      expect(updated.quantidadeDisponivel).toBe(40);
+
+      // verify persistence by re-reading from DB
+      const fromDb = await repository.findById(created.id!);
+      expect(fromDb!.quantidadeReservada).toBe(10);
+      expect(fromDb!.quantidadeDisponivel).toBe(40);
+    });
+
+    it('should reject reservation exceeding available stock', async () => {
+      const created = await repository.create(
+        Produto.create({ nome: 'Pastilha', precoUnitario: 90, quantidadeEstoque: 10, estoqueMinimo: 5 }),
+      );
+
+      expect(() => created.reserve(11)).toThrow('Estoque insuficiente');
+    });
+
+    it('should reserve exactly the available quantity (boundary)', async () => {
+      const created = await repository.create(
+        Produto.create({ nome: 'Correia', precoUnitario: 120, quantidadeEstoque: 10, estoqueMinimo: 3 }),
+      );
+
+      created.reserve(10);
+      const updated = await repository.update(created);
+
+      expect(updated.quantidadeReservada).toBe(10);
+      expect(updated.quantidadeDisponivel).toBe(0);
+    });
+
+    it('should release reserved stock and persist', async () => {
+      const created = await repository.create(
+        Produto.create({ nome: 'Oleo', precoUnitario: 45, quantidadeEstoque: 50, estoqueMinimo: 10 }),
+      );
+
+      created.reserve(20);
+      await repository.update(created);
+
+      created.release(8);
+      const updated = await repository.update(created);
+
+      expect(updated.quantidadeReservada).toBe(12);
+      expect(updated.quantidadeDisponivel).toBe(38);
+    });
+
+    it('should deduct stock (consume reserved) and persist', async () => {
+      const created = await repository.create(
+        Produto.create({ nome: 'Vela', precoUnitario: 15, quantidadeEstoque: 40, estoqueMinimo: 5 }),
+      );
+
+      created.reserve(10);
+      created.deduct(10);
+      const updated = await repository.update(created);
+
+      expect(updated.quantidadeEstoque).toBe(30);
+      expect(updated.quantidadeReservada).toBe(0);
+      expect(updated.quantidadeDisponivel).toBe(30);
+    });
+
+    it('should add stock and persist', async () => {
+      const created = await repository.create(
+        Produto.create({ nome: 'Junta', precoUnitario: 35, quantidadeEstoque: 0, estoqueMinimo: 5 }),
+      );
+
+      created.addStock(25);
+      const updated = await repository.update(created);
+
+      expect(updated.quantidadeEstoque).toBe(25);
+
+      const fromDb = await repository.findById(created.id!);
+      expect(fromDb!.quantidadeEstoque).toBe(25);
+    });
+
+    it('should reflect low stock alert after deduction', async () => {
+      const created = await repository.create(
+        Produto.create({ nome: 'Rolamento', precoUnitario: 50, quantidadeEstoque: 12, estoqueMinimo: 10 }),
+      );
+
+      expect(created.isLowStock()).toBe(false);
+
+      created.reserve(3);
+      created.deduct(3);
+      const updated = await repository.update(created);
+
+      expect(updated.quantidadeEstoque).toBe(9);
+      expect(updated.isLowStock()).toBe(true);
+    });
+
+    it('should handle multiple reserve-release-deduct cycles', async () => {
+      const created = await repository.create(
+        Produto.create({ nome: 'Amortecedor', precoUnitario: 200, quantidadeEstoque: 30, estoqueMinimo: 5 }),
+      );
+
+      // First OS reserves 5
+      created.reserve(5);
+      await repository.update(created);
+      expect(created.quantidadeDisponivel).toBe(25);
+
+      // Second OS reserves 10
+      created.reserve(10);
+      await repository.update(created);
+      expect(created.quantidadeDisponivel).toBe(15);
+
+      // First OS is cancelled, release 5
+      created.release(5);
+      await repository.update(created);
+      expect(created.quantidadeReservada).toBe(10);
+      expect(created.quantidadeDisponivel).toBe(20);
+
+      // Second OS is executed, deduct 10
+      created.deduct(10);
+      const final = await repository.update(created);
+      expect(final.quantidadeEstoque).toBe(20);
+      expect(final.quantidadeReservada).toBe(0);
+      expect(final.quantidadeDisponivel).toBe(20);
+    });
+  });
+
   describe('delete', () => {
     it('should delete a Produto', async () => {
       const created = await repository.create(

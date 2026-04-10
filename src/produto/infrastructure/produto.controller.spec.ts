@@ -4,6 +4,7 @@ import { ProdutoController } from './produto.controller';
 import { ProdutoService } from '../application/produto.service';
 import { Produto } from '../domain/produto.entity';
 import { DuplicateNameError } from '../domain/errors/duplicate-name.error';
+import { InsufficientStockError } from '../domain/errors/insufficient-stock.error';
 
 const mockProduto = Produto.reconstitute({
   id: 'abc-123',
@@ -23,6 +24,8 @@ const mockService = {
   update: jest.fn(),
   delete: jest.fn(),
   addStock: jest.fn(),
+  reserveStock: jest.fn(),
+  releaseStock: jest.fn(),
 };
 
 describe('ProdutoController', () => {
@@ -138,6 +141,52 @@ describe('ProdutoController', () => {
 
       const result = await controller.addStock('abc-123', { quantidade: 20 });
       expect(result.quantidadeEstoque).toBe(70);
+    });
+  });
+
+  describe('POST /produtos/:id/reservar', () => {
+    it('should reserve stock and return updated produto', async () => {
+      const updated = Produto.reconstitute({
+        id: 'abc-123', nome: 'Filtro de oleo', descricao: 'Filtro para motor',
+        precoUnitario: 29.9, quantidadeEstoque: 50, quantidadeReservada: 15,
+        estoqueMinimo: 10, ativo: true,
+      });
+      mockService.reserveStock.mockResolvedValue(updated);
+
+      const result = await controller.reserveStock('abc-123', { quantidade: 10 });
+      expect(result.quantidadeReservada).toBe(15);
+      expect(result.quantidadeDisponivel).toBe(35);
+    });
+
+    it('should throw ConflictException when stock is insufficient', async () => {
+      mockService.reserveStock.mockRejectedValue(
+        new InsufficientStockError('Filtro de oleo', 100, 50),
+      );
+
+      await expect(
+        controller.reserveStock('abc-123', { quantidade: 100 }),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('should propagate NotFoundException', async () => {
+      mockService.reserveStock.mockRejectedValue(new NotFoundException());
+      await expect(
+        controller.reserveStock('999', { quantidade: 5 }),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('POST /produtos/:id/liberar', () => {
+    it('should release stock and return updated produto', async () => {
+      const updated = Produto.reconstitute({
+        id: 'abc-123', nome: 'Filtro de oleo', descricao: 'Filtro para motor',
+        precoUnitario: 29.9, quantidadeEstoque: 50, quantidadeReservada: 5,
+        estoqueMinimo: 10, ativo: true,
+      });
+      mockService.releaseStock.mockResolvedValue(updated);
+
+      const result = await controller.releaseStock('abc-123', { quantidade: 10 });
+      expect(result.quantidadeReservada).toBe(5);
     });
   });
 
