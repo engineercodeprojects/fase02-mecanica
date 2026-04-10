@@ -7,6 +7,21 @@ datasource db {
   provider = "postgresql"
 }
 
+model Produto {
+  id                   String   @id @default(uuid())
+  nome                 String
+  descricao            String?
+  precoUnitario        Decimal  @map("preco_unitario")
+  quantidadeEstoque    Int      @map("quantidade_estoque")
+  quantidadeReservada  Int      @default(0) @map("quantidade_reservada")
+  estoqueMinimo        Int      @map("estoque_minimo")
+  ativo                Boolean  @default(true)
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  @@map("produto")
+}
+
 enum StatusOrdemDeServico {
   RECEBIDA
   EM_DIAGNOSTICO
