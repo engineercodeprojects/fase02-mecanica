@@ -1,165 +1,165 @@
-# QA Plan — US-05: Catalogo de Produtos (Pecas e Insumos)
+# QA Plan — US-05: Product Catalog (Parts and Supplies)
 
-## Resumo
-Valida o CRUD completo de produtos com controle de estoque (disponivel vs reservada), alerta de estoque baixo, paginacao, filtro por nome e validacoes de dominio.
+## Summary
+Validates the full CRUD of products with stock control (available vs reserved), low stock alerts, pagination, name filtering, and domain validations.
 
-## Pre-requisitos
-- Docker instalado (para testes de integracao via testcontainers)
-- Node.js 20+ instalado
-- Dependencias instaladas (`npm install`)
-- Porta 3000 disponivel para testes manuais
+## Prerequisites
+- Docker installed (for integration tests via testcontainers)
+- Node.js 20+ installed
+- Dependencies installed (`npm install`)
+- Port 3000 available for manual testing
 
-## Cenarios de Teste
+## Test Scenarios
 
-### CT-01: Criar um Produto valido
-- **Tipo:** Automatizado
-- **Criterio de aceite:** CRUD completo de produtos
-- **Pre-condicao:** Aplicacao rodando ou testes executaveis
-- **Passos:**
-  1. `POST /produtos` com body: `{ "nome": "Filtro de oleo", "descricao": "Filtro para motor", "precoUnitario": 29.9, "quantidadeEstoque": 50, "estoqueMinimo": 10 }`
-  2. Verificar status 201
-  3. Verificar que a resposta contem `id`, `nome`, `precoUnitario`, `quantidadeEstoque`, `quantidadeReservada: 0`, `quantidadeDisponivel: 50`, `estoqueMinimo`, `ativo: true`, `alertaEstoqueBaixo: false`
-- **Resultado esperado:** Produto criado com controle de estoque inicializado
-- **Resultado alternativo (erro):** 400 se campos obrigatorios ausentes
+### TS-01: Create a valid Produto
+- **Type:** Automated
+- **Acceptance criterion:** Full product CRUD
+- **Precondition:** App running or tests executable
+- **Steps:**
+  1. `POST /produtos` with body: `{ "nome": "Filtro de oleo", "descricao": "Filtro para motor", "precoUnitario": 29.9, "quantidadeEstoque": 50, "estoqueMinimo": 10 }`
+  2. Verify response status 201
+  3. Verify response contains `id`, `nome`, `precoUnitario`, `quantidadeEstoque`, `quantidadeReservada: 0`, `quantidadeDisponivel: 50`, `estoqueMinimo`, `ativo: true`, `alertaEstoqueBaixo: false`
+- **Expected result:** Product created with stock control initialized
+- **Alternative result (error):** 400 if required fields are missing
 
-### CT-02: Rejeitar nome duplicado
-- **Tipo:** Automatizado
-- **Criterio de aceite:** CRUD completo de produtos
-- **Pre-condicao:** Um produto com nome "Filtro de oleo" ja existe
-- **Passos:**
-  1. `POST /produtos` com `"nome": "Filtro de oleo"`
-  2. Verificar status 409 (Conflict)
-- **Resultado esperado:** ConflictException com mensagem sobre nome duplicado
-- **Resultado alternativo (erro):** Produto criado com nome duplicado
+### TS-02: Reject duplicate name
+- **Type:** Automated
+- **Acceptance criterion:** Full product CRUD
+- **Precondition:** A product named "Filtro de oleo" already exists
+- **Steps:**
+  1. `POST /produtos` with `"nome": "Filtro de oleo"`
+  2. Verify response status 409 (Conflict)
+- **Expected result:** ConflictException with duplicate name message
+- **Alternative result (error):** Product created with duplicate name
 
-### CT-03: Validacao de campos obrigatorios
-- **Tipo:** Automatizado
-- **Criterio de aceite:** Campos: nome, descricao, preco unitario, quantidade em estoque, estoque minimo
-- **Passos:**
-  1. `POST /produtos` com body vazio — verificar 400
-  2. Verificar mensagens de erro para campos obrigatorios
-- **Resultado esperado:** Erros de validacao para cada campo ausente
+### TS-03: Required fields validation
+- **Type:** Automated
+- **Acceptance criterion:** Fields: nome, descricao, preco unitario, quantidade em estoque, estoque minimo
+- **Steps:**
+  1. `POST /produtos` with empty body — verify 400
+  2. Verify error messages for required fields
+- **Expected result:** Validation errors for each missing required field
 
-### CT-04: Preco deve ser positivo
-- **Tipo:** Automatizado
-- **Criterio de aceite:** Preco e quantidades devem ser valores positivos
-- **Passos:**
-  1. `POST /produtos` com `"precoUnitario": 0` — verificar 400
-  2. `POST /produtos` com `"precoUnitario": -10` — verificar 400
-  3. `POST /produtos` com `"precoUnitario": 29.9` — verificar 201
-- **Resultado esperado:** Apenas valores positivos aceitos
+### TS-04: Price must be positive
+- **Type:** Automated
+- **Acceptance criterion:** Price and quantities must be positive values
+- **Steps:**
+  1. `POST /produtos` with `"precoUnitario": 0` — verify 400
+  2. `POST /produtos` with `"precoUnitario": -10` — verify 400
+  3. `POST /produtos` with `"precoUnitario": 29.9` — verify 201
+- **Expected result:** Only positive values accepted
 
-### CT-05: Quantidades nao podem ser negativas
-- **Tipo:** Automatizado
-- **Criterio de aceite:** Preco e quantidades devem ser valores positivos
-- **Passos:**
-  1. `POST /produtos` com `"quantidadeEstoque": -1` — verificar 400
-  2. `POST /produtos` com `"estoqueMinimo": -1` — verificar 400
-  3. `POST /produtos` com `"quantidadeEstoque": 0, "estoqueMinimo": 0` — verificar 201
-- **Resultado esperado:** Zero permitido, negativo rejeitado
+### TS-05: Quantities cannot be negative
+- **Type:** Automated
+- **Acceptance criterion:** Price and quantities must be positive values
+- **Steps:**
+  1. `POST /produtos` with `"quantidadeEstoque": -1` — verify 400
+  2. `POST /produtos` with `"estoqueMinimo": -1` — verify 400
+  3. `POST /produtos` with `"quantidadeEstoque": 0, "estoqueMinimo": 0` — verify 201
+- **Expected result:** Zero allowed, negative rejected
 
-### CT-06: Quantidade disponivel vs reservada
-- **Tipo:** Automatizado
-- **Criterio de aceite:** Controlar quantidade disponivel vs reservada
-- **Passos:**
-  1. Criar produto com quantidadeEstoque: 50
-  2. Reservar 10 unidades (via dominio)
-  3. Verificar quantidadeDisponivel = 40, quantidadeReservada = 10
-  4. Liberar 5 unidades
-  5. Verificar quantidadeDisponivel = 45, quantidadeReservada = 5
-- **Resultado esperado:** Calculo correto de disponivel = estoque - reservada
+### TS-06: Available vs reserved quantity
+- **Type:** Automated
+- **Acceptance criterion:** Control available vs reserved quantity
+- **Steps:**
+  1. Create product with quantidadeEstoque: 50
+  2. Reserve 10 units (via domain)
+  3. Verify quantidadeDisponivel = 40, quantidadeReservada = 10
+  4. Release 5 units
+  5. Verify quantidadeDisponivel = 45, quantidadeReservada = 5
+- **Expected result:** Correct calculation: available = stock - reserved
 
-### CT-07: Rejeitar reserva acima do disponivel
-- **Tipo:** Automatizado
-- **Criterio de aceite:** Controlar quantidade disponivel vs reservada
-- **Passos:**
-  1. Criar produto com quantidadeEstoque: 10
-  2. Tentar reservar 11 unidades
-- **Resultado esperado:** InsufficientStockError lancado
+### TS-07: Reject reservation above available
+- **Type:** Automated
+- **Acceptance criterion:** Control available vs reserved quantity
+- **Steps:**
+  1. Create product with quantidadeEstoque: 10
+  2. Try to reserve 11 units
+- **Expected result:** InsufficientStockError thrown
 
-### CT-08: Alerta de estoque baixo
-- **Tipo:** Automatizado
-- **Criterio de aceite:** Alertar quando estoque atingir quantidade minima
-- **Passos:**
-  1. Criar produto com quantidadeEstoque: 10, estoqueMinimo: 10
-  2. Verificar `alertaEstoqueBaixo: true` na resposta
-  3. Criar produto com quantidadeEstoque: 50, estoqueMinimo: 10
-  4. Verificar `alertaEstoqueBaixo: false`
-- **Resultado esperado:** Alerta quando estoque <= estoqueMinimo
+### TS-08: Low stock alert
+- **Type:** Automated
+- **Acceptance criterion:** Alert when stock reaches minimum quantity
+- **Steps:**
+  1. Create product with quantidadeEstoque: 10, estoqueMinimo: 10
+  2. Verify `alertaEstoqueBaixo: true` in response
+  3. Create product with quantidadeEstoque: 50, estoqueMinimo: 10
+  4. Verify `alertaEstoqueBaixo: false`
+- **Expected result:** Alert when stock <= estoqueMinimo
 
-### CT-09: Listar com paginacao e filtro
-- **Tipo:** Automatizado
-- **Criterio de aceite:** GET /produtos - listar com paginacao e filtros
-- **Passos:**
-  1. Criar 5 produtos
-  2. `GET /produtos?page=1&limit=2` — verificar 2 itens, total=5
-  3. `GET /produtos?nome=filtro` — verificar filtro case-insensitive
-- **Resultado esperado:** Paginacao e filtro funcionando corretamente
+### TS-09: List with pagination and filter
+- **Type:** Automated
+- **Acceptance criterion:** GET /produtos - list with pagination and filters
+- **Steps:**
+  1. Create 5 products
+  2. `GET /produtos?page=1&limit=2` — verify 2 items, total=5
+  3. `GET /produtos?nome=filtro` — verify case-insensitive filter
+- **Expected result:** Pagination and filtering work correctly
 
-### CT-10: Adicionar estoque
-- **Tipo:** Automatizado
-- **Criterio de aceite:** CRUD completo de produtos
-- **Passos:**
-  1. Criar produto com quantidadeEstoque: 50
-  2. `POST /produtos/:id/estoque` com `{ "quantidade": 20 }`
-  3. Verificar quantidadeEstoque = 70
-- **Resultado esperado:** Estoque incrementado corretamente
+### TS-10: Add stock
+- **Type:** Automated
+- **Acceptance criterion:** Full product CRUD
+- **Steps:**
+  1. Create product with quantidadeEstoque: 50
+  2. `POST /produtos/:id/estoque` with `{ "quantidade": 20 }`
+  3. Verify quantidadeEstoque = 70
+- **Expected result:** Stock incremented correctly
 
-### CT-11: Atualizar produto
-- **Tipo:** Automatizado
-- **Criterio de aceite:** CRUD completo de produtos
-- **Passos:**
-  1. `PATCH /produtos/:id` com `{ "nome": "Novo nome", "precoUnitario": 50 }`
-  2. Verificar dados atualizados, campos nao alterados permanecem iguais
-- **Resultado esperado:** Atualizacao parcial funciona
+### TS-11: Update product
+- **Type:** Automated
+- **Acceptance criterion:** Full product CRUD
+- **Steps:**
+  1. `PATCH /produtos/:id` with `{ "nome": "Novo nome", "precoUnitario": 50 }`
+  2. Verify updated data, unchanged fields remain the same
+- **Expected result:** Partial update works
 
-### CT-12: Remover produto
-- **Tipo:** Automatizado
-- **Criterio de aceite:** CRUD completo de produtos
-- **Passos:**
-  1. `DELETE /produtos/:id` — verificar 204
-  2. `GET /produtos/:id` — verificar 404
-- **Resultado esperado:** Produto removido
+### TS-12: Delete product
+- **Type:** Automated
+- **Acceptance criterion:** Full product CRUD
+- **Steps:**
+  1. `DELETE /produtos/:id` — verify 204
+  2. `GET /produtos/:id` — verify 404
+- **Expected result:** Product removed
 
-## Testes de Borda
-- Reservar exatamente a quantidade disponivel (limite)
-- Adicionar estoque a produto com estoque zerado
-- Produto com estoqueMinimo = 0 (nunca alerta)
-- Descricao opcional (criar sem descricao)
-- Verificacao de nome duplicado e case-insensitive
+## Edge Cases
+- Reserve exactly the available quantity (boundary)
+- Add stock to a product with zero stock
+- Product with estoqueMinimo = 0 (never alerts)
+- Optional descricao (create without it)
+- Duplicate name check is case-insensitive
 
-## Rastreabilidade
+## Traceability
 
-| Criterio de Aceite | Cenarios de Teste |
+| Acceptance Criterion | Test Scenarios |
 |---|---|
-| CRUD completo de produtos | CT-01, CT-02, CT-10, CT-11, CT-12 |
-| Campos: nome, descricao, preco unitario, quantidade, estoque minimo | CT-03 |
-| Controlar quantidade disponivel vs reservada | CT-06, CT-07 |
-| GET /produtos - listar com paginacao e filtros | CT-09 |
-| Alertar quando estoque atingir quantidade minima | CT-08 |
-| Preco e quantidades devem ser valores positivos | CT-04, CT-05 |
-| Documentacao Swagger | Decorators Swagger presentes em todos os metodos do controller |
+| Full product CRUD | TS-01, TS-02, TS-10, TS-11, TS-12 |
+| Fields: nome, descricao, preco unitario, quantidade, estoque minimo | TS-03 |
+| Control available vs reserved quantity | TS-06, TS-07 |
+| GET /produtos - list with pagination and filters | TS-09 |
+| Alert when stock reaches minimum quantity | TS-08 |
+| Price and quantities must be positive values | TS-04, TS-05 |
+| Swagger documentation | Swagger decorators present on all controller methods |
 
-## Checklist de Validacao
-- [ ] Todos os criterios de aceite cobertos
-- [ ] Testes de borda documentados
-- [ ] Fluxos de erro documentados
-- [ ] Instrucoes de setup claras
+## Validation Checklist
+- [ ] All acceptance criteria covered
+- [ ] Edge cases documented
+- [ ] Error flows documented
+- [ ] Setup instructions are clear
 
-## Comandos Uteis
+## Useful Commands
 ```bash
-# Rodar todos os testes
+# Run all tests
 npm test
 
-# Rodar apenas testes do produto
+# Run only produto tests
 npx jest produto --verbose
 
-# Rodar testes de integracao
+# Run integration tests
 npx jest integration --verbose
 
-# Rodar com cobertura
+# Run with coverage
 npm run test:cov
 
-# Subir a aplicacao para testes manuais
+# Start the app for manual testing
 docker compose up -d
 ```
