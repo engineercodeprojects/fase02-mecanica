@@ -2,7 +2,7 @@
 
 Back-end MVP para sistema integrado de oficina mecânica, focado em gestão de ordens de serviço, clientes, veículos e peças.
 
-**Stack:** NestJS · TypeScript · Prisma · PostgreSQL · Docker
+**Stack:** NestJS · TypeScript · Prisma · PostgreSQL · Docker · JWT
 
 ---
 
@@ -15,7 +15,7 @@ Back-end MVP para sistema integrado de oficina mecânica, focado em gestão de o
 
 ## Rodando com Docker Compose (recomendado)
 
-Sobe a aplicação e o banco de dados juntos. As migrations são aplicadas automaticamente na inicialização.
+Sobe a aplicação e o banco de dados juntos. **As migrations e o seed são executados automaticamente na inicialização do container.**
 
 ```bash
 # 1. Clone o repositório
@@ -29,7 +29,7 @@ docker compose up -d
 docker compose logs -f app
 ```
 
-A API estará disponível em `http://localhost:3000`.  
+A API estará disponível em `http://localhost:3000`.
 A documentação Swagger estará em `http://localhost:3000/api`.
 
 ### Parar os containers
@@ -43,6 +43,74 @@ Para remover também o volume do banco de dados:
 ```bash
 docker compose down -v
 ```
+
+---
+
+## Variáveis de ambiente
+
+Copie `.env.example` para `.env` (usado apenas em execução local sem Docker):
+
+```bash
+cp .env.example .env
+```
+
+| Variável | Descrição | Default |
+|---|---|---|
+| `DATABASE_URL` | String de conexão PostgreSQL | `postgresql://postgres:postgres@localhost:5432/oficina_mecanica?schema=public` |
+| `PORT` | Porta da API | `3000` |
+| `JWT_SECRET` | Chave secreta do JWT | `dev-secret-change-me` |
+| `JWT_EXPIRES_IN` | Expiração do token | `1h` |
+
+---
+
+## Autenticação
+
+A API usa JWT para proteger endpoints administrativos. Endpoints marcados com `@Public()` não requerem autenticação.
+
+### Usuários de teste (seed automático)
+
+Os usuários abaixo são criados automaticamente na inicialização:
+
+| Role | Email | Senha |
+|---|---|---|
+| ADMIN | `admin@oficina.com` | `admin123` |
+| ATENDENTE | `atendente@oficina.com` | `atendente123` |
+| MECANICO | `mecanico@oficina.com` | `mecanico123` |
+| ESTOQUISTA | `estoquista@oficina.com` | `estoquista123` |
+| CLIENTE | `cliente@oficina.com` | `cliente123` |
+
+### Fazendo login
+
+```bash
+curl -X POST http://localhost:3000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@oficina.com","senha":"admin123"}'
+```
+
+Resposta:
+
+```json
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIs...",
+  "usuario": {
+    "id": "uuid",
+    "nome": "Admin Oficina",
+    "email": "admin@oficina.com",
+    "role": "ADMIN"
+  }
+}
+```
+
+### Usando o token
+
+Inclua o header `Authorization: Bearer <token>` nas requisições a endpoints protegidos:
+
+```bash
+curl http://localhost:3000/auth/me \
+  -H "Authorization: Bearer <token>"
+```
+
+No Swagger (`http://localhost:3000/api`), clique em **Authorize** e cole o token.
 
 ---
 
@@ -60,12 +128,6 @@ npm install
 cp .env.example .env
 ```
 
-Edite o `.env` se necessário. O valor padrão espera um PostgreSQL local na porta `5432`:
-
-```env
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/oficina_mecanica?schema=public"
-```
-
 ### 3. Suba apenas o banco de dados
 
 ```bash
@@ -78,7 +140,13 @@ docker compose up -d postgres
 npm run prisma:migrate
 ```
 
-### 5. Inicie a aplicação
+### 5. Popule o banco com os usuários de teste
+
+```bash
+npm run seed
+```
+
+### 6. Inicie a aplicação
 
 ```bash
 # Desenvolvimento (com hot reload)
@@ -89,8 +157,31 @@ npm run build
 npm start
 ```
 
-A API estará disponível em `http://localhost:3000`.  
+A API estará disponível em `http://localhost:3000`.
 A documentação Swagger estará em `http://localhost:3000/api`.
+
+---
+
+## Testes
+
+```bash
+# Todos os testes (unit + integração + e2e)
+npm test
+
+# Com cobertura
+npm run test:cov
+
+# Apenas testes unitários
+npx jest --testPathIgnorePatterns=integration --testPathIgnorePatterns=e2e
+
+# Apenas testes de integração (requer Docker)
+npx jest integration
+
+# Apenas testes e2e (requer Docker)
+npx jest e2e
+```
+
+Os testes de integração e e2e usam [testcontainers](https://node.testcontainers.org/) para subir uma instância PostgreSQL efêmera — não há dependência de banco externo rodando.
 
 ---
 
@@ -98,13 +189,44 @@ A documentação Swagger estará em `http://localhost:3000/api`.
 
 | Comando | Descrição |
 |---|---|
-| `npm run start:dev` | Inicia em modo desenvolvimento |
+| `npm run start:dev` | Inicia em modo desenvolvimento com hot reload |
 | `npm run build` | Compila o TypeScript |
 | `npm start` | Inicia a versão compilada |
-| `npm test` | Executa os testes |
+| `npm test` | Executa todos os testes |
 | `npm run test:cov` | Executa os testes com cobertura |
+| `npm run seed` | Popula o banco com os usuários de teste |
 | `npm run prisma:generate` | Gera o cliente Prisma |
-| `npm run prisma:migrate` | Cria e aplica migrations |
+| `npm run prisma:migrate` | Cria e aplica migrations (dev) |
 | `npm run prisma:deploy` | Aplica migrations (produção) |
 | `npm run docker:up` | Sobe os containers |
 | `npm run docker:down` | Para os containers |
+
+---
+
+## Estrutura do projeto
+
+```
+src/
+├── main.ts                   # Bootstrap da aplicação
+├── app.module.ts             # Módulo raiz
+├── prisma/                   # PrismaService global
+├── auth/                     # Bounded Context: Autenticação
+│   ├── domain/               # Entidade Usuario, Role, VOs, errors
+│   ├── application/          # AuthService
+│   └── infrastructure/       # Controller, guards, strategies, decorators
+├── servico/                  # Bounded Context: Catálogo (serviços)
+├── produto/                  # Bounded Context: Estoque (produtos)
+└── test/                     # Helpers compartilhados de teste
+```
+
+Cada bounded context segue a estrutura DDD em camadas: **Domain → Application → Infrastructure**.
+
+---
+
+## Documentação
+
+- **Swagger:** `http://localhost:3000/api` (quando a app está rodando)
+- **ER Diagram:** `docs/schema.dbml` (importe em [dbdiagram.io](https://dbdiagram.io))
+- **User Stories:** `docs/user-stories/`
+- **QA Plans:** `docs/qa-plans/`
+- **Event Storming:** Miro board (ver `CLAUDE.md` para o ID)
