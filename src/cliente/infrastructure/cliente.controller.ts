@@ -61,8 +61,8 @@ export class ClienteController {
   @ApiOkResponse({ description: "Lista de clientes paginada" })
   async findAll(@Query() query: QueryClienteDto) {
     const result = await this.service.findAll({
-      page: query.page ?? 1,
-      limit: query.limit ?? 10,
+      page: query.page!,
+      limit: query.limit!,
       nome: query.nome,
     });
 

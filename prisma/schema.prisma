@@ -25,6 +25,24 @@ model Cliente {
   telefone  String
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+  
+  veiculos  Veiculo[]
 
   @@map("cliente")
+}
+
+model Veiculo {
+  id        String   @id @default(uuid())
+  placa     String   @unique
+  marca     String
+  modelo    String
+  ano       Int
+  clienteId String   @map("cliente_id")
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+ 
+  cliente   Cliente  @relation(fields: [clienteId], references: [id])
+ 
+  @@map("veiculo")
 }
