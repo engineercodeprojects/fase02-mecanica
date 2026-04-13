@@ -31,7 +31,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    entrypoint: ['sh', '-c', 'npx prisma migrate deploy && npm run seed && node dist/main.js']
+    entrypoint: ['sh', '-c', 'npx prisma migrate deploy && node dist/main.js']
 
 volumes:
   pgdata:

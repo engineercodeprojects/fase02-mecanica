@@ -15,7 +15,7 @@ Back-end MVP para sistema integrado de oficina mecânica, focado em gestão de o
 
 ## Rodando com Docker Compose (recomendado)
 
-Sobe a aplicação e o banco de dados juntos. **As migrations e o seed são executados automaticamente na inicialização do container.**
+Sobe a aplicação e o banco de dados juntos. **As migrations (incluindo a migration de seed dos usuários de teste) são aplicadas automaticamente na inicialização do container.**
 
 ```bash
 # 1. Clone o repositório
@@ -67,9 +67,9 @@ cp .env.example .env
 
 A API usa JWT para proteger endpoints administrativos. Endpoints marcados com `@Public()` não requerem autenticação.
 
-### Usuários de teste (seed automático)
+### Usuários de teste
 
-Os usuários abaixo são criados automaticamente na inicialização:
+Os usuários abaixo são criados automaticamente pela migration `99999999999999_seed_test_users`:
 
 | Role | Email | Senha |
 |---|---|---|
@@ -140,13 +140,9 @@ docker compose up -d postgres
 npm run prisma:migrate
 ```
 
-### 5. Popule o banco com os usuários de teste
+> A migration `99999999999999_seed_test_users` já popula os usuários de teste automaticamente.
 
-```bash
-npm run seed
-```
-
-### 6. Inicie a aplicação
+### 5. Inicie a aplicação
 
 ```bash
 # Desenvolvimento (com hot reload)
@@ -194,7 +190,6 @@ Os testes de integração e e2e usam [testcontainers](https://node.testcontainer
 | `npm start` | Inicia a versão compilada |
 | `npm test` | Executa todos os testes |
 | `npm run test:cov` | Executa os testes com cobertura |
-| `npm run seed` | Popula o banco com os usuários de teste |
 | `npm run prisma:generate` | Gera o cliente Prisma |
 | `npm run prisma:migrate` | Cria e aplica migrations (dev) |
 | `npm run prisma:deploy` | Aplica migrations (produção) |
