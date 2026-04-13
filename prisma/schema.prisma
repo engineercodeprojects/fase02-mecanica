@@ -7,6 +7,27 @@ datasource db {
   provider = "postgresql"
 }
 
+model Usuario {
+  id        String   @id @default(uuid())
+  nome      String
+  email     String   @unique
+  senhaHash String   @map("senha_hash")
+  role      Role
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("usuario")
+}
+
+enum Role {
+  ADMIN
+  ATENDENTE
+  MECANICO
+  ESTOQUISTA
+  CLIENTE
+}
+
 enum StatusOrdemDeServico {
   RECEBIDA
   EM_DIAGNOSTICO
