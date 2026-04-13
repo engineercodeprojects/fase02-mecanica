@@ -62,8 +62,8 @@ export class VeiculoController {
   @ApiOkResponse({ description: "Lista de veiculos paginada" })
   async findAll(@Query() query: QueryVeiculoDto) {
     const result = await this.service.findAll({
-      page: query.page!,
-      limit: query.limit!,
+      page: query.page ?? 1,
+      limit: query.limit ?? 10,
       marca: query.marca,
     });
 
