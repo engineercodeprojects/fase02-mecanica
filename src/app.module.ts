@@ -1,10 +1,11 @@
-import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { PrismaModule } from './prisma/prisma.module';
 import { ServicoModule } from './servico/servico.module';
 import { ProdutoModule } from './produto/produto.module';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import { Module } from "@nestjs/common";
+import { ConfigModule } from "@nestjs/config";
+import { PrismaModule } from "./prisma/prisma.module";
+import { AppController } from "./app.controller";
+import { AppService } from "./app.service";
+import { ClienteModule } from "./cliente/cliente.module";
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { AppService } from './app.service';
     PrismaModule,
     ServicoModule,
     ProdutoModule,
+    ClienteModule,
   ],
   controllers: [AppController],
   providers: [AppService],
