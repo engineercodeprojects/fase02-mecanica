@@ -7,6 +7,19 @@ datasource db {
   provider = "postgresql"
 }
 
+model Servico {
+  id                 String   @id @default(uuid())
+  nome               String
+  descricao          String?
+  precoBase          Decimal  @map("preco_base")
+  tempoEstimadoHoras Float    @map("tempo_estimado_horas")
+  ativo              Boolean  @default(true)
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@map("servico")
+}
+
 enum StatusOrdemDeServico {
   RECEBIDA
   EM_DIAGNOSTICO
