@@ -1,8 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AppModule } from './app.module';
 import { PrismaService } from './prisma/prisma.service';
-import { AppService } from './app.service';
-import { AppController } from './app.controller';
 
 const mockPrismaService = {
   $connect: jest.fn(),
@@ -30,15 +28,5 @@ describe('AppModule', () => {
   it('should provide PrismaService via PrismaModule', () => {
     const prisma = module.get<PrismaService>(PrismaService);
     expect(prisma).toBeDefined();
-  });
-
-  it('should provide AppService', () => {
-    const service = module.get<AppService>(AppService);
-    expect(service).toBeDefined();
-  });
-
-  it('should provide AppController', () => {
-    const controller = module.get<AppController>(AppController);
-    expect(controller).toBeDefined();
   });
 });
