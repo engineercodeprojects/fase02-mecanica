@@ -43,7 +43,8 @@ Table servico {
   id uuid [pk, default: `uuid_generate_v4()`]
   nome varchar [not null]
   descricao text
-  preco decimal [not null, note: 'Positive value']
+  preco_base decimal [not null, note: 'Positive value']
+  tempo_estimado_horas float [not null, note: 'Estimated time in hours']
   ativo boolean [default: true]
   created_at timestamp [default: `now()`]
   updated_at timestamp

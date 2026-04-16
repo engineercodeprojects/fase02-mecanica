@@ -28,6 +28,64 @@ enum Role {
   CLIENTE
 }
 
+model Servico {
+  id                 String   @id @default(uuid())
+  nome               String
+  descricao          String?
+  precoBase          Decimal  @map("preco_base")
+  tempoEstimadoHoras Float    @map("tempo_estimado_horas")
+  ativo              Boolean  @default(true)
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@map("servico")
+}
+
+model Produto {
+  id                   String   @id @default(uuid())
+  nome                 String
+  descricao            String?
+  precoUnitario        Decimal  @map("preco_unitario")
+  quantidadeEstoque    Int      @map("quantidade_estoque")
+  quantidadeReservada  Int      @default(0) @map("quantidade_reservada")
+  estoqueMinimo        Int      @map("estoque_minimo")
+  ativo                Boolean  @default(true)
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  @@map("produto")
+}
+
+model Cliente {
+  id        String   @id @default(uuid())
+  nome      String
+  cpfCnpj   String   @unique @map("cpf_cnpj")
+  email     String?
+  telefone  String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  veiculos  Veiculo[]
+
+  @@map("cliente")
+}
+
+model Veiculo {
+  id        String   @id @default(uuid())
+  placa     String   @unique
+  marca     String
+  modelo    String
+  ano       Int
+  clienteId String   @map("cliente_id")
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  cliente   Cliente  @relation(fields: [clienteId], references: [id])
+
+  @@map("veiculo")
+}
+
 enum StatusOrdemDeServico {
   RECEBIDA
   EM_DIAGNOSTICO
