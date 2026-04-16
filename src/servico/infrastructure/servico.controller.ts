@@ -13,25 +13,34 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import {
+  ApiBearerAuth,
   ApiConflictResponse,
   ApiCreatedResponse,
+  ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
+  ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { ServicoService } from '../application/servico.service';
 import { CreateServicoDto } from './dto/create-servico.dto';
 import { UpdateServicoDto } from './dto/update-servico.dto';
 import { QueryServicoDto } from './dto/query-servico.dto';
 import { DuplicateNameError } from '../domain/errors/duplicate-name.error';
+import { Roles } from '../../auth/infrastructure/decorators/roles.decorator';
+import { Role } from '../../auth/domain/role.enum';
 
 @ApiTags('Servicos')
+@ApiBearerAuth()
+@ApiUnauthorizedResponse({ description: 'Token JWT ausente ou invalido' })
+@ApiForbiddenResponse({ description: 'Role insuficiente' })
 @Controller('servicos')
 export class ServicoController {
   constructor(private readonly service: ServicoService) {}
 
   @Post()
+  @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Criar um novo servico' })
   @ApiCreatedResponse({ description: 'Servico criado com sucesso' })
   @ApiConflictResponse({ description: 'Ja existe um servico com esse nome' })
@@ -47,6 +56,7 @@ export class ServicoController {
   }
 
   @Get()
+  @Roles(Role.ADMIN, Role.ATENDENTE, Role.MECANICO, Role.ESTOQUISTA)
   @ApiOperation({ summary: 'Listar servicos com paginacao e filtro' })
   @ApiOkResponse({ description: 'Lista de servicos paginada' })
   async findAll(@Query() query: QueryServicoDto) {
@@ -65,6 +75,7 @@ export class ServicoController {
   }
 
   @Get(':id')
+  @Roles(Role.ADMIN, Role.ATENDENTE, Role.MECANICO, Role.ESTOQUISTA)
   @ApiOperation({ summary: 'Buscar servico por ID' })
   @ApiOkResponse({ description: 'Servico encontrado' })
   @ApiNotFoundResponse({ description: 'Servico nao encontrado' })
@@ -73,6 +84,7 @@ export class ServicoController {
   }
 
   @Patch(':id')
+  @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Atualizar um servico' })
   @ApiOkResponse({ description: 'Servico atualizado com sucesso' })
   @ApiNotFoundResponse({ description: 'Servico nao encontrado' })
@@ -92,6 +104,7 @@ export class ServicoController {
   }
 
   @Delete(':id')
+  @Roles(Role.ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Remover um servico' })
   @ApiOkResponse({ description: 'Servico removido com sucesso' })
