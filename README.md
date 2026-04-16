@@ -22,10 +22,13 @@ Sobe a aplicação e o banco de dados juntos. **As migrations (incluindo a migra
 git clone <url-do-repositorio>
 cd software-architecture-tech-challenge-01
 
-# 2. Suba os containers
+# 2. Configure o .env (JWT_SECRET é obrigatória)
+cp .env.example .env
+
+# 3. Suba os containers
 docker compose up -d
 
-# 3. Acompanhe os logs (opcional)
+# 4. Acompanhe os logs (opcional)
 docker compose logs -f app
 ```
 
@@ -58,8 +61,15 @@ cp .env.example .env
 |---|---|---|
 | `DATABASE_URL` | String de conexão PostgreSQL | `postgresql://postgres:postgres@localhost:5432/oficina_mecanica?schema=public` |
 | `PORT` | Porta da API | `3000` |
-| `JWT_SECRET` | Chave secreta do JWT | `dev-secret-change-me` |
+| `JWT_SECRET` | **Obrigatória.** Chave secreta do JWT | — (a app falha em iniciar sem esta variável) |
 | `JWT_EXPIRES_IN` | Expiração do token | `1h` |
+
+> **Importante:** `JWT_SECRET` é obrigatória. Antes de subir os containers, copie `.env.example` para `.env` ou defina a variável no seu shell. Exemplo:
+>
+> ```bash
+> cp .env.example .env
+> # edite .env e coloque um valor forte em JWT_SECRET
+> ```
 
 ---
 

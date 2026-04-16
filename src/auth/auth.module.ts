@@ -16,12 +16,20 @@ import { RolesGuard } from './infrastructure/guards/roles.guard';
     PassportModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET') ?? 'dev-secret-change-me',
-        signOptions: {
-          expiresIn: (configService.get<string>('JWT_EXPIRES_IN') ?? '1h') as any,
-        },
-      }),
+      useFactory: (configService: ConfigService) => {
+        const secret = configService.get<string>('JWT_SECRET');
+        if (!secret) {
+          throw new Error(
+            'JWT_SECRET is required. Set it in your environment before starting the app.',
+          );
+        }
+        return {
+          secret,
+          signOptions: {
+            expiresIn: (configService.get<string>('JWT_EXPIRES_IN') ?? '1h') as any,
+          },
+        };
+      },
     }),
   ],
   controllers: [AuthController],
