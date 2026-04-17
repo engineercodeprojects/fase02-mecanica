@@ -13,12 +13,15 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import {
+  ApiBearerAuth,
   ApiConflictResponse,
   ApiCreatedResponse,
+  ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
+  ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { ProdutoService } from '../application/produto.service';
 import { CreateProdutoDto } from './dto/create-produto.dto';
@@ -27,13 +30,19 @@ import { QueryProdutoDto } from './dto/query-produto.dto';
 import { AddStockDto } from './dto/add-stock.dto';
 import { DuplicateNameError } from '../domain/errors/duplicate-name.error';
 import { InsufficientStockError } from '../domain/errors/insufficient-stock.error';
+import { Roles } from '../../auth/infrastructure/decorators/roles.decorator';
+import { Role } from '../../auth/domain/role.enum';
 
 @ApiTags('Produtos')
+@ApiBearerAuth()
+@ApiUnauthorizedResponse({ description: 'Token JWT ausente ou invalido' })
+@ApiForbiddenResponse({ description: 'Role insuficiente' })
 @Controller('produtos')
 export class ProdutoController {
   constructor(private readonly service: ProdutoService) {}
 
   @Post()
+  @Roles(Role.ADMIN, Role.ESTOQUISTA)
   @ApiOperation({ summary: 'Criar um novo produto' })
   @ApiCreatedResponse({ description: 'Produto criado com sucesso' })
   @ApiConflictResponse({ description: 'Ja existe um produto com esse nome' })
@@ -49,6 +58,7 @@ export class ProdutoController {
   }
 
   @Get()
+  @Roles(Role.ADMIN, Role.ATENDENTE, Role.MECANICO, Role.ESTOQUISTA)
   @ApiOperation({ summary: 'Listar produtos com paginacao e filtro' })
   @ApiOkResponse({ description: 'Lista de produtos paginada' })
   async findAll(@Query() query: QueryProdutoDto) {
@@ -67,6 +77,7 @@ export class ProdutoController {
   }
 
   @Get(':id')
+  @Roles(Role.ADMIN, Role.ATENDENTE, Role.MECANICO, Role.ESTOQUISTA)
   @ApiOperation({ summary: 'Buscar produto por ID' })
   @ApiOkResponse({ description: 'Produto encontrado' })
   @ApiNotFoundResponse({ description: 'Produto nao encontrado' })
@@ -75,6 +86,7 @@ export class ProdutoController {
   }
 
   @Patch(':id')
+  @Roles(Role.ADMIN, Role.ESTOQUISTA)
   @ApiOperation({ summary: 'Atualizar um produto' })
   @ApiOkResponse({ description: 'Produto atualizado com sucesso' })
   @ApiNotFoundResponse({ description: 'Produto nao encontrado' })
@@ -94,6 +106,7 @@ export class ProdutoController {
   }
 
   @Post(':id/estoque')
+  @Roles(Role.ADMIN, Role.ESTOQUISTA)
   @ApiOperation({ summary: 'Adicionar quantidade ao estoque' })
   @ApiOkResponse({ description: 'Estoque atualizado com sucesso' })
   @ApiNotFoundResponse({ description: 'Produto nao encontrado' })
@@ -105,6 +118,7 @@ export class ProdutoController {
   }
 
   @Post(':id/reservar')
+  @Roles(Role.ADMIN, Role.ATENDENTE, Role.MECANICO)
   @ApiOperation({ summary: 'Reservar quantidade do estoque' })
   @ApiOkResponse({ description: 'Reserva realizada com sucesso' })
   @ApiNotFoundResponse({ description: 'Produto nao encontrado' })
@@ -123,6 +137,7 @@ export class ProdutoController {
   }
 
   @Post(':id/liberar')
+  @Roles(Role.ADMIN, Role.ATENDENTE, Role.MECANICO)
   @ApiOperation({ summary: 'Liberar quantidade reservada do estoque' })
   @ApiOkResponse({ description: 'Liberacao realizada com sucesso' })
   @ApiNotFoundResponse({ description: 'Produto nao encontrado' })
@@ -134,6 +149,7 @@ export class ProdutoController {
   }
 
   @Delete(':id')
+  @Roles(Role.ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Remover um produto' })
   @ApiOkResponse({ description: 'Produto removido com sucesso' })

@@ -15,12 +15,15 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import {
+  ApiBearerAuth,
   ApiConflictResponse,
   ApiCreatedResponse,
+  ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
+  ApiUnauthorizedResponse,
 } from "@nestjs/swagger";
 import { VeiculoService } from "../application/veiculo.service";
 import { CreateVeiculoDto } from "./dto/create-veiculo.dto";
@@ -29,13 +32,19 @@ import { QueryVeiculoDto } from "./dto/query-veiculo.dto";
 import { DuplicatePlacaError } from "../domain/errors/duplicate-placa.error";
 import { InvalidPlacaError } from "../domain/errors/invalid-placa.error";
 import { ClienteNotFoundError } from "../domain/errors/cliente-not-found.error";
+import { Roles } from "../../auth/infrastructure/decorators/roles.decorator";
+import { Role } from "../../auth/domain/role.enum";
 
 @ApiTags("Veiculos")
+@ApiBearerAuth()
+@ApiUnauthorizedResponse({ description: "Token JWT ausente ou invalido" })
+@ApiForbiddenResponse({ description: "Role insuficiente" })
 @Controller("veiculos")
 export class VeiculoController {
   constructor(private readonly service: VeiculoService) {}
 
   @Post()
+  @Roles(Role.ADMIN, Role.ATENDENTE)
   @ApiOperation({ summary: "Cadastrar um novo veiculo" })
   @ApiCreatedResponse({ description: "Veiculo criado com sucesso" })
   @ApiConflictResponse({ description: "Ja existe um veiculo com essa placa" })
@@ -58,6 +67,7 @@ export class VeiculoController {
   }
 
   @Get()
+  @Roles(Role.ADMIN, Role.ATENDENTE, Role.MECANICO)
   @ApiOperation({ summary: "Listar veiculos com paginacao e filtro" })
   @ApiOkResponse({ description: "Lista de veiculos paginada" })
   async findAll(@Query() query: QueryVeiculoDto) {
@@ -76,6 +86,7 @@ export class VeiculoController {
   }
 
   @Get(":id")
+  @Roles(Role.ADMIN, Role.ATENDENTE, Role.MECANICO)
   @ApiOperation({ summary: "Buscar veiculo por ID" })
   @ApiOkResponse({ description: "Veiculo encontrado" })
   @ApiNotFoundResponse({ description: "Veiculo nao encontrado" })
@@ -84,6 +95,7 @@ export class VeiculoController {
   }
 
   @Patch(":id")
+  @Roles(Role.ADMIN, Role.ATENDENTE)
   @ApiOperation({ summary: "Atualizar um veiculo" })
   @ApiOkResponse({ description: "Veiculo atualizado com sucesso" })
   @ApiNotFoundResponse({ description: "Veiculo nao encontrado" })
@@ -106,6 +118,7 @@ export class VeiculoController {
   }
 
   @Delete(":id")
+  @Roles(Role.ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: "Remover um veiculo" })
   @ApiOkResponse({ description: "Veiculo removido com sucesso" })

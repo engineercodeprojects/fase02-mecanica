@@ -14,13 +14,16 @@ import {
   BadRequestException,
 } from "@nestjs/common";
 import {
+  ApiBearerAuth,
   ApiConflictResponse,
   ApiCreatedResponse,
+  ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
   ApiBadRequestResponse,
+  ApiUnauthorizedResponse,
 } from "@nestjs/swagger";
 import { ClienteService } from "../application/cliente.service";
 import { CreateClienteDto } from "./dto/create-cliente.dto";
@@ -28,13 +31,19 @@ import { UpdateClienteDto } from "./dto/update-cliente.dto";
 import { QueryClienteDto } from "./dto/query-cliente.dto";
 import { DuplicateCpfCnpjError } from "../domain/errors/duplicate-cpf-cnpj.error";
 import { InvalidCpfCnpjError } from "../domain/errors/invalid-cpf-cnpj.error";
+import { Roles } from "../../auth/infrastructure/decorators/roles.decorator";
+import { Role } from "../../auth/domain/role.enum";
 
 @ApiTags("Clientes")
+@ApiBearerAuth()
+@ApiUnauthorizedResponse({ description: "Token JWT ausente ou invalido" })
+@ApiForbiddenResponse({ description: "Role insuficiente" })
 @Controller("clientes")
 export class ClienteController {
   constructor(private readonly service: ClienteService) {}
 
   @Post()
+  @Roles(Role.ADMIN, Role.ATENDENTE)
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: "Cadastrar um novo cliente" })
   @ApiCreatedResponse({ description: "Cliente criado com sucesso" })
@@ -57,6 +66,7 @@ export class ClienteController {
   }
 
   @Get()
+  @Roles(Role.ADMIN, Role.ATENDENTE, Role.MECANICO)
   @ApiOperation({ summary: "Listar clientes com paginacao e filtro" })
   @ApiOkResponse({ description: "Lista de clientes paginada" })
   async findAll(@Query() query: QueryClienteDto) {
@@ -75,6 +85,7 @@ export class ClienteController {
   }
 
   @Get(":id")
+  @Roles(Role.ADMIN, Role.ATENDENTE, Role.MECANICO)
   @ApiOperation({ summary: "Buscar cliente por ID" })
   @ApiOkResponse({ description: "Cliente encontrado" })
   @ApiNotFoundResponse({ description: "Cliente nao encontrado" })
@@ -83,6 +94,7 @@ export class ClienteController {
   }
 
   @Patch(":id")
+  @Roles(Role.ADMIN, Role.ATENDENTE)
   @ApiOperation({ summary: "Atualizar um cliente" })
   @ApiOkResponse({ description: "Cliente atualizado com sucesso" })
   @ApiNotFoundResponse({ description: "Cliente nao encontrado" })
@@ -94,6 +106,7 @@ export class ClienteController {
   }
 
   @Delete(":id")
+  @Roles(Role.ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: "Remover um cliente" })
   @ApiOkResponse({ description: "Cliente removido com sucesso" })
