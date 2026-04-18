@@ -29,6 +29,7 @@ import { OrdemDeServicoService } from '../application/ordem-de-servico.service';
 import { CreateOrdemDeServicoDto } from './dto/create-ordem-de-servico.dto';
 import { CompletarDiagnosticoDto } from './dto/completar-diagnostico.dto';
 import { QueryOrdemDeServicoDto } from './dto/query-ordem-de-servico.dto';
+import { AtribuirMecanicoDto } from './dto/atribuir-mecanico.dto';
 import { ClienteNotFoundError } from '../domain/errors/cliente-not-found.error';
 import { VeiculoNotFoundError } from '../domain/errors/veiculo-not-found.error';
 import { VeiculoClienteMismatchError } from '../domain/errors/veiculo-cliente-mismatch.error';
@@ -118,11 +119,11 @@ export class OrdemDeServicoController {
   })
   async atribuirMecanico(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() body: { usuarioId: string },
+    @Body() dto: AtribuirMecanicoDto,
   ) {
     try {
       return this.toResponse(
-        await this.service.atribuirMecanico(id, body.usuarioId),
+        await this.service.atribuirMecanico(id, dto.usuarioId),
       );
     } catch (error) {
       if (error instanceof InvalidStatusTransitionError) {
