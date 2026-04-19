@@ -7,6 +7,7 @@ export interface FindAllParams {
   limit?: number;
   clienteId?: string;
   status?: string;
+  numero?: string;
 }
 
 export interface PaginatedResult<T> {

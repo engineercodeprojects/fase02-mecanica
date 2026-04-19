@@ -90,6 +90,7 @@ export class OrdemDeServicoController {
       limit: query.limit ?? 10,
       clienteId: query.clienteId,
       status: query.status,
+      numero: query.numero,
     });
 
     return {

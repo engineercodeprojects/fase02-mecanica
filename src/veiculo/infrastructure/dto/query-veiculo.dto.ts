@@ -29,4 +29,12 @@ export class QueryVeiculoDto {
   @IsOptional()
   @IsString()
   marca?: string;
+
+  @ApiPropertyOptional({
+    description: "Filtrar por placa (ex: ABC-1234 ou ABC1234)",
+    example: "ABC-1234",
+  })
+  @IsOptional()
+  @IsString()
+  placa?: string;
 }

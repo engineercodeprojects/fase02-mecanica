@@ -44,6 +44,7 @@ export class PrismaOrdemDeServicoRepository
     const where: any = {};
     if (params.clienteId) where.clienteId = params.clienteId;
     if (params.status) where.status = params.status;
+    if (params.numero) where.numero = { contains: params.numero, mode: 'insensitive' };
 
     const [data, total] = await Promise.all([
       this.prisma.ordemDeServico.findMany({
