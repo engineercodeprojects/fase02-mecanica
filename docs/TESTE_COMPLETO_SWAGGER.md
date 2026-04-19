@@ -1,0 +1,341 @@
+# Guia Completo: Teste de Ordem de Serviço (OS) no Swagger
+
+## Fluxo da Ordem de Serviço
+
+```
+RECEBIDA → EM_DIAGNOSTICO → AGUARDANDO_APROVACAO → EM_EXECUCAO → FINALIZADA → ENTREGUE
+```
+
+---
+
+## Passo 1: Login
+
+**Endpoint:** `POST /auth/login`
+
+1. Abra o Swagger em `http://localhost:3000/api/docs`
+2. Localize a seção **Auth**
+3. Clique em **POST /auth/login**
+4. Clique em **Try it out**
+5. Preencha o body:
+
+```json
+{
+  "email": "admin@oficina.com",
+  "senha": "admin123"
+}
+```
+
+6. Clique em **Execute**
+7. **Copie o `accessToken` da resposta** — você usará isso em todos os próximos passos
+
+A resposta será algo como:
+```json
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "usuario": {
+    "id": "ec6ee661-7b63-49ca-abd4-72e26883aa53",
+    "nome": "Admin Oficina",
+    "email": "admin@oficina.com",
+    "role": "ADMIN"
+  }
+}
+```
+
+---
+
+## Passo 2: Autorizar no Swagger
+
+1. No topo do Swagger, clique no botão **Authorize** (cadeado)
+2. Cole o `accessToken` no campo **value** (sem adicionar "Bearer ", o Swagger adiciona automaticamente)
+3. Clique em **Authorize**
+4. Clique em **Close**
+
+Agora todos os endpoints estarão autenticados com seu token.
+
+---
+
+## Passo 3: Criar um Cliente
+
+**Endpoint:** `POST /clientes`
+
+1. Localize a seção **Clientes**
+2. Clique em **POST /clientes**
+3. Clique em **Try it out**
+4. Preencha o body:
+
+```json
+{
+  "nome": "João Silva",
+  "cpfCnpj": "12345678901",
+  "telefone": "11999999999",
+  "email": "joao@email.com"
+}
+```
+
+5. Clique em **Execute**
+6. **Copie o `id` do cliente** da resposta
+
+Resposta esperada:
+```json
+{
+  "id": "abc-123-def",
+  "nome": "João Silva",
+  "cpfCnpj": "12345678901",
+  "telefone": "11999999999",
+  "email": "joao@email.com"
+}
+```
+
+---
+
+## Passo 4: Criar um Veículo para o Cliente
+
+**Endpoint:** `POST /clientes/{clienteId}/veiculos`
+
+1. Localize a seção **Clientes**
+2. Clique em **POST /clientes/{clienteId}/veiculos**
+3. Clique em **Try it out**
+4. No campo `clienteId`, cole o ID do cliente criado no **Passo 3**
+5. Preencha o body:
+
+```json
+{
+  "placa": "ABC-1234",
+  "marca": "Toyota",
+  "modelo": "Corolla",
+  "ano": 2020
+}
+```
+
+6. Clique em **Execute**
+7. **Copie o `id` do veículo** da resposta
+
+Resposta esperada:
+```json
+{
+  "id": "veiculo-123-xyz",
+  "placa": "ABC1234",
+  "marca": "Toyota",
+  "modelo": "Corolla",
+  "ano": 2020,
+  "clienteId": "abc-123-def",
+  "ativo": true
+}
+```
+
+---
+
+## Passo 5: Criar uma Ordem de Serviço (Status: RECEBIDA)
+
+**Endpoint:** `POST /ordens-servico`
+
+1. Localize a seção **Ordens de Servico**
+2. Clique em **POST /ordens-servico**
+3. Clique em **Try it out**
+4. Preencha o body:
+
+```json
+{
+  "clienteId": "abc-123-def",
+  "veiculoId": "veiculo-123-xyz",
+  "descricaoInicial": "Carro fazendo barulho estranho"
+}
+```
+
+5. Clique em **Execute**
+6. **Copie o `id` e o `numero` da OS** da resposta
+
+Resposta esperada:
+```json
+{
+  "id": "os-123-456",
+  "numero": "OS-001",
+  "clienteId": "abc-123-def",
+  "veiculoId": "veiculo-123-xyz",
+  "usuarioId": null,
+  "descricaoInicial": "Carro fazendo barulho estranho",
+  "diagnostico": null,
+  "status": "RECEBIDA",
+  "createdAt": "2026-04-19T10:00:00Z",
+  "updatedAt": "2026-04-19T10:00:00Z"
+}
+```
+
+---
+
+## Passo 6: Atribuir um Mecânico (Status: EM_DIAGNOSTICO)
+
+**Endpoint:** `POST /ordens-servico/{id}/atribuir-mecanico`
+
+Para este teste, usaremos o ID do usuário mecânico. Use:
+- ID do mecânico: `ef26b646-090d-42da-9573-e453460d256a` (ou outro mecânico)
+
+1. Clique em **POST /ordens-servico/{id}/atribuir-mecanico**
+2. Clique em **Try it out**
+3. No campo `id`, cole o ID da OS criada no **Passo 5**
+4. Preencha o body:
+
+```json
+{
+  "usuarioId": "ef26b646-090d-42da-9573-e453460d256a"
+}
+```
+
+5. Clique em **Execute**
+
+Resposta esperada — **status mudará para `EM_DIAGNOSTICO`**:
+```json
+{
+  "id": "os-123-456",
+  "numero": "OS-001",
+  "status": "EM_DIAGNOSTICO",
+  "usuarioId": "ef26b646-090d-42da-9573-e453460d256a",
+  ...
+}
+```
+
+---
+
+## Passo 7: Completar Diagnóstico (Status: AGUARDANDO_APROVACAO)
+
+**Endpoint:** `POST /ordens-servico/{id}/completar-diagnostico`
+
+1. Clique em **POST /ordens-servico/{id}/completar-diagnostico**
+2. Clique em **Try it out**
+3. No campo `id`, cole o ID da OS
+4. Preencha o body:
+
+```json
+{
+  "diagnostico": "Correia de distribuição desgastada. Necessário substituição de peças."
+}
+```
+
+5. Clique em **Execute**
+
+Resposta esperada — **status mudará para `AGUARDANDO_APROVACAO`**:
+```json
+{
+  "id": "os-123-456",
+  "numero": "OS-001",
+  "status": "AGUARDANDO_APROVACAO",
+  "diagnostico": "Correia de distribuição desgastada. Necessário substituição de peças.",
+  ...
+}
+```
+
+---
+
+## Passo 8: Aprovar Orçamento (Status: EM_EXECUCAO)
+
+**Endpoint:** `POST /ordens-servico/{id}/aprovar-orcamento`
+
+1. Clique em **POST /ordens-servico/{id}/aprovar-orcamento**
+2. Clique em **Try it out**
+3. No campo `id`, cole o ID da OS
+4. Clique em **Execute** (sem body)
+
+Resposta esperada — **status mudará para `EM_EXECUCAO`**:
+```json
+{
+  "id": "os-123-456",
+  "numero": "OS-001",
+  "status": "EM_EXECUCAO",
+  ...
+}
+```
+
+---
+
+## Passo 9: Finalizar Execução (Status: FINALIZADA)
+
+**Endpoint:** `POST /ordens-servico/{id}/finalizar-execucao`
+
+1. Clique em **POST /ordens-servico/{id}/finalizar-execucao**
+2. Clique em **Try it out**
+3. No campo `id`, cole o ID da OS
+4. Clique em **Execute** (sem body)
+
+Resposta esperada — **status mudará para `FINALIZADA`**:
+```json
+{
+  "id": "os-123-456",
+  "numero": "OS-001",
+  "status": "FINALIZADA",
+  ...
+}
+```
+
+---
+
+## Passo 10: Entregar Veículo (Status: ENTREGUE)
+
+**Endpoint:** `POST /ordens-servico/{id}/entregar`
+
+1. Clique em **POST /ordens-servico/{id}/entregar**
+2. Clique em **Try it out**
+3. No campo `id`, cole o ID da OS
+4. Clique em **Execute** (sem body)
+
+Resposta esperada — **status mudará para `ENTREGUE`** ✅:
+```json
+{
+  "id": "os-123-456",
+  "numero": "OS-001",
+  "status": "ENTREGUE",
+  ...
+}
+```
+
+---
+
+## Resumo do Fluxo
+
+| Passo | Endpoint | Método | Status Result |
+|-------|----------|--------|---------------|
+| 1 | `/auth/login` | POST | — (autentica) |
+| 2 | `/clientes` | POST | — (cria cliente) |
+| 3 | `/clientes/{id}/veiculos` | POST | — (cria veículo) |
+| 4 | `/ordens-servico` | POST | **RECEBIDA** |
+| 5 | `/ordens-servico/{id}/atribuir-mecanico` | POST | **EM_DIAGNOSTICO** |
+| 6 | `/ordens-servico/{id}/completar-diagnostico` | POST | **AGUARDANDO_APROVACAO** |
+| 7 | `/ordens-servico/{id}/aprovar-orcamento` | POST | **EM_EXECUCAO** |
+| 8 | `/ordens-servico/{id}/finalizar-execucao` | POST | **FINALIZADA** |
+| 9 | `/ordens-servico/{id}/entregar` | POST | **ENTREGUE** ✅ |
+
+---
+
+## Dicas Importantes
+
+✅ **Sempre copie os IDs da resposta anterior** para usar nos próximos passos
+
+✅ **Mantenha o token autorizado** durante todo o teste
+
+✅ **Respeite a ordem dos status** — não é possível pular etapas
+
+✅ **Você pode rejeitar um orçamento** (Passo 8 alternativo):
+- Endpoint: `POST /ordens-servico/{id}/rejeitar-orcamento`
+- Status resultante: **CANCELADA**
+
+---
+
+## Alternativa: Rejeitar Orçamento
+
+Se desejar testar a rejeição, no **Passo 8**, em vez de aprovar:
+
+**Endpoint:** `POST /ordens-servico/{id}/rejeitar-orcamento`
+
+1. Clique em **POST /ordens-servico/{id}/rejeitar-orcamento**
+2. Clique em **Try it out**
+3. Cole o ID da OS
+4. Clique em **Execute**
+
+Resposta — **status mudará para `CANCELADA`**:
+```json
+{
+  "id": "os-123-456",
+  "numero": "OS-001",
+  "status": "CANCELADA",
+  ...
+}
+```
