@@ -74,6 +74,8 @@ export class ClienteController {
       page: query.page ?? 1,
       limit: query.limit ?? 10,
       nome: query.nome,
+      cpf: query.cpf,
+      cnpj: query.cnpj,
     });
 
     return {

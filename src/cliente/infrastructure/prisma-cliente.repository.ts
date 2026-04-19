@@ -40,11 +40,19 @@ export class PrismaClienteRepository implements ClienteRepository {
   }
 
   async findAll(params: FindAllParams): Promise<PaginatedResult<Cliente>> {
-    const { page, limit, nome } = params;
+    const { page, limit, nome, cpf, cnpj } = params;
     const skip = (page - 1) * limit;
-    const where = nome
-      ? { nome: { contains: nome, mode: "insensitive" as const } }
-      : {};
+    const where: any = {};
+
+    if (nome) {
+      where.nome = { contains: nome, mode: "insensitive" as const };
+    }
+    if (cpf) {
+      where.cpfCnpj = { contains: cpf, mode: "insensitive" as const };
+    }
+    if (cnpj) {
+      where.cpfCnpj = { contains: cnpj, mode: "insensitive" as const };
+    }
 
     const [records, total] = await Promise.all([
       this.prisma.cliente.findMany({
