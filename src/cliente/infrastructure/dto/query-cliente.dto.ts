@@ -29,4 +29,20 @@ export class QueryClienteDto {
   @IsOptional()
   @IsString()
   nome?: string;
+
+  @ApiPropertyOptional({
+    description: "Filtrar por CPF (apenas numeros)",
+    example: "12345678900",
+  })
+  @IsOptional()
+  @IsString()
+  cpf?: string;
+
+  @ApiPropertyOptional({
+    description: "Filtrar por CNPJ (apenas numeros)",
+    example: "12345678901234",
+  })
+  @IsOptional()
+  @IsString()
+  cnpj?: string;
 }

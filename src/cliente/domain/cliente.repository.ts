@@ -4,6 +4,8 @@ export interface FindAllParams {
   page: number;
   limit: number;
   nome?: string;
+  cpf?: string;
+  cnpj?: string;
 }
 
 export interface PaginatedResult<T> {

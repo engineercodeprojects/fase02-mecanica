@@ -5,6 +5,7 @@ export interface FindAllParams {
   limit: number;
   clienteId?: string;
   marca?: string;
+  placa?: string;
 }
 
 export interface PaginatedResult<T> {

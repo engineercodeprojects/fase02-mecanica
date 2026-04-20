@@ -75,6 +75,7 @@ export class VeiculoController {
       page: query.page ?? 1,
       limit: query.limit ?? 10,
       marca: query.marca,
+      placa: query.placa,
     });
 
     return {

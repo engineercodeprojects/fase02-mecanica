@@ -44,7 +44,7 @@ export class PrismaVeiculoRepository implements VeiculoRepository {
   }
 
   async findAll(params: FindAllParams): Promise<PaginatedResult<Veiculo>> {
-    const { page, limit, clienteId, marca } = params;
+    const { page, limit, clienteId, marca, placa } = params;
     const skip = (page - 1) * limit;
 
     const where: Record<string, unknown> = {};
@@ -54,6 +54,9 @@ export class PrismaVeiculoRepository implements VeiculoRepository {
     }
     if (marca) {
       where.marca = { contains: marca, mode: "insensitive" };
+    }
+    if (placa) {
+      where.placa = { contains: placa.toUpperCase().replace(/-/g, ""), mode: "insensitive" };
     }
 
     const [records, total] = await Promise.all([

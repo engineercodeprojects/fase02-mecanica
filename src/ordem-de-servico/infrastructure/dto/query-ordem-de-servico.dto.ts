@@ -47,4 +47,13 @@ export class QueryOrdemDeServicoDto {
   @IsString()
   @IsOptional()
   status?: string;
+
+  @ApiProperty({
+    description: 'Filtrar por número da OS',
+    example: 'OS-001',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  numero?: string;
 }
