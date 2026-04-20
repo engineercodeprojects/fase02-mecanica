@@ -107,9 +107,11 @@ export class OrdemDeServico {
 
   private static gerarNumeroOS(): string {
     const ano = new Date().getFullYear();
-    const timestamp = Date.now();
-    const random = Math.floor(Math.random() * 10000);
-    return `OS-${ano}-${String(random).padStart(5, '0')}`;
+    const timestamp = Date.now().toString().slice(-10);
+    const random = Math.floor(Math.random() * 10000)
+      .toString()
+      .padStart(4, '0');
+    return `OS-${ano}-${timestamp}-${random}`;
   }
 
   atribuirMecanico(usuarioId: string): void {

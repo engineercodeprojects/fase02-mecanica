@@ -21,7 +21,7 @@ describe('OrdemDeServico Entity', () => {
       expect(os.status).toBe(StatusOS.RECEBIDA);
       expect(os.usuarioId).toBeNull();
       expect(os.diagnostico).toBeNull();
-      expect(os.numero).toMatch(/^OS-\d{4}-\d{5}$/);
+      expect(os.numero).toMatch(/^OS-\d{4}-\d{10}-\d{4}$/);
     });
 
     it('should throw InvalidDescricaoError if descricaoInicial is too short', () => {

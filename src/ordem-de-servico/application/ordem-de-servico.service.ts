@@ -12,6 +12,7 @@ import {
 import { ClienteNotFoundError } from '../domain/errors/cliente-not-found.error';
 import { VeiculoNotFoundError } from '../domain/errors/veiculo-not-found.error';
 import { VeiculoClienteMismatchError } from '../domain/errors/veiculo-cliente-mismatch.error';
+import { OsNaoPertenceAoClienteError } from '../domain/errors/os-nao-pertence-ao-cliente.error';
 import { ClienteRepository, CLIENTE_REPOSITORY } from '../../cliente/domain/cliente.repository';
 import { VeiculoRepository, VEICULO_REPOSITORY } from '../../veiculo/domain/veiculo.repository';
 
@@ -95,6 +96,23 @@ export class OrdemDeServicoService {
     const ordemDeServico = await this.findById(id);
     ordemDeServico.rejeitar();
     return this.repository.update(ordemDeServico);
+  }
+
+  async assertOsPertenceAoCliente(
+    ordemId: string,
+    emailCliente: string,
+  ): Promise<void> {
+    const ordemDeServico = await this.findById(ordemId);
+    const cliente = await this.clienteRepository.findById(
+      ordemDeServico.clienteId,
+    );
+    if (
+      !cliente ||
+      !cliente.email ||
+      cliente.email.toLowerCase() !== emailCliente.toLowerCase()
+    ) {
+      throw new OsNaoPertenceAoClienteError(ordemId);
+    }
   }
 
   async finalizarExecucao(id: string): Promise<OrdemDeServico> {

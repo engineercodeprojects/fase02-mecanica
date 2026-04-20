@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
@@ -35,8 +36,11 @@ import { VeiculoNotFoundError } from '../domain/errors/veiculo-not-found.error';
 import { VeiculoClienteMismatchError } from '../domain/errors/veiculo-cliente-mismatch.error';
 import { InvalidStatusTransitionError } from '../domain/errors/invalid-status-transition.error';
 import { InvalidDescricaoError } from '../domain/errors/invalid-descricao.error';
+import { OsNaoPertenceAoClienteError } from '../domain/errors/os-nao-pertence-ao-cliente.error';
 import { Roles } from '../../auth/infrastructure/decorators/roles.decorator';
+import { CurrentUser } from '../../auth/infrastructure/decorators/current-user.decorator';
 import { Role } from '../../auth/domain/role.enum';
+import { Usuario } from '../../auth/domain/usuario.entity';
 
 @ApiTags('Ordens de Servico')
 @ApiBearerAuth()
@@ -173,10 +177,19 @@ export class OrdemDeServicoController {
   @ApiBadRequestResponse({
     description: 'Transicao de status invalida',
   })
-  async aprovarOrcamento(@Param('id', ParseUUIDPipe) id: string) {
+  async aprovarOrcamento(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() usuario: Usuario,
+  ) {
     try {
+      if (usuario?.role === Role.CLIENTE) {
+        await this.service.assertOsPertenceAoCliente(id, usuario.email.value);
+      }
       return this.toResponse(await this.service.aprovarOrcamento(id));
     } catch (error) {
+      if (error instanceof OsNaoPertenceAoClienteError) {
+        throw new ForbiddenException(error.message);
+      }
       if (error instanceof InvalidStatusTransitionError) {
         throw new BadRequestException(error.message);
       }
@@ -194,10 +207,19 @@ export class OrdemDeServicoController {
   @ApiBadRequestResponse({
     description: 'Transicao de status invalida',
   })
-  async rejeitarOrcamento(@Param('id', ParseUUIDPipe) id: string) {
+  async rejeitarOrcamento(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() usuario: Usuario,
+  ) {
     try {
+      if (usuario?.role === Role.CLIENTE) {
+        await this.service.assertOsPertenceAoCliente(id, usuario.email.value);
+      }
       return this.toResponse(await this.service.rejeitarOrcamento(id));
     } catch (error) {
+      if (error instanceof OsNaoPertenceAoClienteError) {
+        throw new ForbiddenException(error.message);
+      }
       if (error instanceof InvalidStatusTransitionError) {
         throw new BadRequestException(error.message);
       }

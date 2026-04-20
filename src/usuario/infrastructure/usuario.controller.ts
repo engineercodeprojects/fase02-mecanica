@@ -1,5 +1,7 @@
 import {
+  BadRequestException,
   Body,
+  ConflictException,
   Controller,
   Delete,
   Get,
@@ -64,10 +66,10 @@ export class UsuarioController {
       return await this.service.create(dto);
     } catch (error) {
       if (error instanceof EmailAlreadyExistsError) {
-        throw new Error(error.message);
+        throw new ConflictException(error.message);
       }
       if (error instanceof InvalidRoleError) {
-        throw new Error(error.message);
+        throw new BadRequestException(error.message);
       }
       throw error;
     }
@@ -160,10 +162,10 @@ export class UsuarioController {
         throw new NotFoundException(error.message);
       }
       if (error instanceof EmailAlreadyExistsError) {
-        throw new Error(error.message);
+        throw new ConflictException(error.message);
       }
       if (error instanceof InvalidRoleError) {
-        throw new Error(error.message);
+        throw new BadRequestException(error.message);
       }
       throw error;
     }
