@@ -70,5 +70,13 @@ describe("ClienteVeiculoController", () => {
         NotFoundException,
       );
     });
+
+    it("should rethrow unknown errors", async () => {
+      mockService.findByClienteId.mockRejectedValue(new Error("unexpected"));
+
+      await expect(controller.findByCliente("cliente-1")).rejects.toThrow(
+        "unexpected",
+      );
+    });
   });
 });

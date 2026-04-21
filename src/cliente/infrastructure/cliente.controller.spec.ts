@@ -129,6 +129,21 @@ describe("ClienteController", () => {
         nome: "Joao",
       });
     });
+
+    it("deve usar paginacao padrao quando page e limit sao undefined", async () => {
+      mockService.findAll.mockResolvedValue({
+        data: [],
+        total: 0,
+        page: 1,
+        limit: 10,
+      });
+
+      await controller.findAll({});
+
+      expect(mockService.findAll).toHaveBeenCalledWith(
+        expect.objectContaining({ page: 1, limit: 10 }),
+      );
+    });
   });
 
   // ==================== GET /clientes/:id ====================

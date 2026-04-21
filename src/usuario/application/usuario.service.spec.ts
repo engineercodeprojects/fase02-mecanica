@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import * as bcrypt from 'bcrypt';
-import { UsuarioService, UsuarioOutput } from './usuario.service';
+import { UsuarioService } from './usuario.service';
 import { UsuarioRepository, USUARIO_REPOSITORY } from '../domain/usuario.repository';
 import { Usuario } from '../../auth/domain/usuario.entity';
 import { Role } from '../../auth/domain/role.enum';
@@ -352,6 +352,37 @@ describe('UsuarioService', () => {
       const result = await service.update(usuarioId, { email, nome: 'João Silva' });
 
       expect(result.email).toBe(email);
+      expect(mockRepository.update).toHaveBeenCalled();
+    });
+
+    it('should use existing values when nome, email and role are not provided', async () => {
+      const usuarioId = 'uuid-123';
+
+      const mockUsuario = Usuario.reconstitute({
+        id: usuarioId,
+        nome: 'João Original',
+        email: 'joao@test.com',
+        senhaHash: 'hash',
+        role: 'MECANICO' as Role,
+        ativo: true,
+      });
+
+      const updatedUsuario = Usuario.reconstitute({
+        id: usuarioId,
+        nome: 'João Original',
+        email: 'joao@test.com',
+        senhaHash: 'hash',
+        role: 'MECANICO' as Role,
+        ativo: false,
+      });
+
+      mockRepository.findById.mockResolvedValue(mockUsuario);
+      mockRepository.update.mockResolvedValue(updatedUsuario);
+
+      const result = await service.update(usuarioId, { ativo: false });
+
+      expect(result.ativo).toBe(false);
+      expect(result.nome).toBe('João Original');
       expect(mockRepository.update).toHaveBeenCalled();
     });
   });

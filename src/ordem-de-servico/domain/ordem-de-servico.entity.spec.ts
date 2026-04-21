@@ -311,5 +311,26 @@ describe('OrdemDeServico Entity', () => {
       expect(os.usuarioId).toBeNull();
       expect(os.diagnostico).toBeNull();
     });
+
+    it('should return createdAt and updatedAt from reconstitute', () => {
+      const createdAt = new Date('2026-01-01');
+      const updatedAt = new Date('2026-01-02');
+
+      const os = OrdemDeServico.reconstitute({
+        id: 'os-123',
+        numero: 'OS-2026-00001',
+        clienteId: 'cliente-123',
+        veiculoId: 'veiculo-456',
+        usuarioId: null,
+        descricaoInicial: 'Cliente relata problemas no freio',
+        diagnostico: null,
+        status: StatusOS.RECEBIDA,
+        createdAt,
+        updatedAt,
+      });
+
+      expect(os.createdAt).toBe(createdAt);
+      expect(os.updatedAt).toBe(updatedAt);
+    });
   });
 });

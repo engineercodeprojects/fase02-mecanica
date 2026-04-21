@@ -97,6 +97,25 @@ describe('Servico (Entity)', () => {
         NameRequiredError,
       );
     });
+
+    it('should update descricao when provided', () => {
+      const servico = Servico.create(validProps);
+      servico.update({ descricao: 'Nova descricao detalhada' });
+      expect(servico.descricao).toBe('Nova descricao detalhada');
+    });
+
+    it('should update tempoEstimadoHoras when provided', () => {
+      const servico = Servico.create(validProps);
+      servico.update({ tempoEstimadoHoras: 3.0 });
+      expect(servico.tempoEstimadoHoras).toBe(3.0);
+    });
+
+    it('should throw InvalidEstimatedTimeError for invalid tempoEstimadoHoras on update', () => {
+      const servico = Servico.create(validProps);
+      expect(() => servico.update({ tempoEstimadoHoras: 0 })).toThrow(
+        InvalidEstimatedTimeError,
+      );
+    });
   });
 
   describe('deactivate / activate', () => {

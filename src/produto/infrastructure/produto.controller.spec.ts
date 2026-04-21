@@ -128,6 +128,11 @@ describe('ProdutoController', () => {
       mockService.update.mockRejectedValue(new DuplicateNameError('Outro'));
       await expect(controller.update('abc-123', { nome: 'Outro' })).rejects.toThrow(ConflictException);
     });
+
+    it('should rethrow unknown errors in update', async () => {
+      mockService.update.mockRejectedValue(new Error('unexpected'));
+      await expect(controller.update('abc-123', { nome: 'Test' })).rejects.toThrow('unexpected');
+    });
   });
 
   describe('POST /produtos/:id/estoque', () => {

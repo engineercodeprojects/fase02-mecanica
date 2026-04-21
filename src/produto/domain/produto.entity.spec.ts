@@ -164,6 +164,23 @@ describe('Produto (Entity)', () => {
       const produto = Produto.create(validProps);
       expect(() => produto.update({ nome: '' })).toThrow(NameRequiredError);
     });
+
+    it('should update descricao when provided', () => {
+      const produto = Produto.create(validProps);
+      produto.update({ descricao: 'Nova descricao' });
+      expect(produto.descricao).toBe('Nova descricao');
+    });
+
+    it('should update estoqueMinimo when provided', () => {
+      const produto = Produto.create(validProps);
+      produto.update({ estoqueMinimo: 20 });
+      expect(produto.estoqueMinimo).toBe(20);
+    });
+
+    it('should throw for invalid estoqueMinimo on update', () => {
+      const produto = Produto.create(validProps);
+      expect(() => produto.update({ estoqueMinimo: -1 })).toThrow();
+    });
   });
 
   describe('deactivate / activate', () => {

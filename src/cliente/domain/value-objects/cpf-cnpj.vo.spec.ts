@@ -23,8 +23,26 @@ describe("CpfCnpj (Value Object)", () => {
   });
 
   describe("CPF invalido", () => {
-    it("deve rejeitar CPF com digitos verificadores incorretos", () => {
+    it("deve rejeitar CPF com digitos verificadores incorretos (segundo digito errado)", () => {
       expect(() => new CpfCnpj("52998224720")).toThrow(InvalidCpfCnpjError);
+    });
+
+    it("deve rejeitar CPF com primeiro digito verificador incorreto", () => {
+      // CPF 52998224725 com o primeiro dígito (pos 10) trocado de 2 para 0
+      expect(() => new CpfCnpj("52998224705")).toThrow(InvalidCpfCnpjError);
+    });
+
+    it("deve aceitar CPF onde resto do primeiro digito eh 10 (vira 0)", () => {
+      // CPF 00000000604: primeiros 9 digitos 000000006, soma ponderada=12,
+      // resto=(12*10)%11=10 -> vira 0; segundo digito=4
+      expect(() => new CpfCnpj("00000000604")).not.toThrow();
+      expect(new CpfCnpj("00000000604").value).toBe("00000000604");
+    });
+
+    it("deve aceitar CPF onde resto do segundo digito eh 10 (vira 0)", () => {
+      // CPF 60000000060: d1=6, demais=0; primeiro digito=6, segundo digito=0
+      expect(() => new CpfCnpj("60000000060")).not.toThrow();
+      expect(new CpfCnpj("60000000060").value).toBe("60000000060");
     });
 
     it("deve rejeitar CPF com todos os digitos iguais", () => {
@@ -61,6 +79,28 @@ describe("CpfCnpj (Value Object)", () => {
   describe("CNPJ invalido", () => {
     it("deve rejeitar CNPJ com digitos verificadores incorretos", () => {
       expect(() => new CpfCnpj("11222333000199")).toThrow(InvalidCpfCnpjError);
+    });
+
+    it("deve rejeitar CNPJ com primeiro digito verificador incorreto", () => {
+      // CNPJ 11222333000181 com pos 13 trocado de 8 para 0
+      expect(() => new CpfCnpj("11222333000101")).toThrow(InvalidCpfCnpjError);
+    });
+
+    it("deve rejeitar CNPJ com segundo digito verificador incorreto", () => {
+      // CNPJ 11222333000181 com pos 14 trocado de 1 para 0
+      expect(() => new CpfCnpj("11222333000180")).toThrow(InvalidCpfCnpjError);
+    });
+
+    it("deve aceitar CNPJ onde resto do primeiro digito eh menor que 2 (primeiro digito=0)", () => {
+      // CNPJ 10000000000307: soma1=11, 11%11=0<2 → dig1=0; dig2=7
+      expect(() => new CpfCnpj("10000000000307")).not.toThrow();
+      expect(new CpfCnpj("10000000000307").value).toBe("10000000000307");
+    });
+
+    it("deve aceitar CNPJ onde resto do segundo digito eh menor que 2 (segundo digito=0)", () => {
+      // CNPJ 80000000000040: d1=8, demais base=0; dig1=4, dig2=0 (resto=1<2)
+      expect(() => new CpfCnpj("80000000000040")).not.toThrow();
+      expect(new CpfCnpj("80000000000040").value).toBe("80000000000040");
     });
 
     it("deve rejeitar CNPJ com todos os digitos iguais", () => {

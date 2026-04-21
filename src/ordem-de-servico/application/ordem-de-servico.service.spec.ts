@@ -8,6 +8,7 @@ import {
 import { ClienteNotFoundError } from '../domain/errors/cliente-not-found.error';
 import { VeiculoNotFoundError } from '../domain/errors/veiculo-not-found.error';
 import { VeiculoClienteMismatchError } from '../domain/errors/veiculo-cliente-mismatch.error';
+import { OsNaoPertenceAoClienteError } from '../domain/errors/os-nao-pertence-ao-cliente.error';
 import { CLIENTE_REPOSITORY, ClienteRepository } from '../../cliente/domain/cliente.repository';
 import { VEICULO_REPOSITORY, VeiculoRepository } from '../../veiculo/domain/veiculo.repository';
 import { OrdemDeServico } from '../domain/ordem-de-servico.entity';
@@ -456,6 +457,81 @@ describe('OrdemDeServicoService', () => {
 
       expect(repository.findById).toHaveBeenCalledWith('os-123');
       expect(repository.delete).toHaveBeenCalled();
+    });
+  });
+
+  describe('assertOsPertenceAoCliente', () => {
+    const makeOs = () =>
+      OrdemDeServico.reconstitute({
+        id: 'os-123',
+        numero: 'OS-2026-00001',
+        clienteId: 'cliente-123',
+        veiculoId: 'veiculo-456',
+        usuarioId: null,
+        descricaoInicial: 'Cliente relata problemas no freio',
+        diagnostico: null,
+        status: StatusOS.RECEBIDA,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+    it('should pass when client email matches', async () => {
+      const os = makeOs();
+      const cliente: any = { id: 'cliente-123', email: 'joao@email.com' };
+
+      repository.findById.mockResolvedValue(os);
+      clienteRepository.findById.mockResolvedValue(cliente);
+
+      await expect(
+        service.assertOsPertenceAoCliente('os-123', 'joao@email.com'),
+      ).resolves.toBeUndefined();
+    });
+
+    it('should pass when email comparison is case-insensitive', async () => {
+      const os = makeOs();
+      const cliente: any = { id: 'cliente-123', email: 'JOAO@EMAIL.COM' };
+
+      repository.findById.mockResolvedValue(os);
+      clienteRepository.findById.mockResolvedValue(cliente);
+
+      await expect(
+        service.assertOsPertenceAoCliente('os-123', 'joao@email.com'),
+      ).resolves.toBeUndefined();
+    });
+
+    it('should throw OsNaoPertenceAoClienteError when cliente is null', async () => {
+      const os = makeOs();
+
+      repository.findById.mockResolvedValue(os);
+      clienteRepository.findById.mockResolvedValue(null);
+
+      await expect(
+        service.assertOsPertenceAoCliente('os-123', 'joao@email.com'),
+      ).rejects.toThrow(OsNaoPertenceAoClienteError);
+    });
+
+    it('should throw OsNaoPertenceAoClienteError when cliente has no email', async () => {
+      const os = makeOs();
+      const cliente: any = { id: 'cliente-123', email: null };
+
+      repository.findById.mockResolvedValue(os);
+      clienteRepository.findById.mockResolvedValue(cliente);
+
+      await expect(
+        service.assertOsPertenceAoCliente('os-123', 'joao@email.com'),
+      ).rejects.toThrow(OsNaoPertenceAoClienteError);
+    });
+
+    it('should throw OsNaoPertenceAoClienteError when email does not match', async () => {
+      const os = makeOs();
+      const cliente: any = { id: 'cliente-123', email: 'outro@email.com' };
+
+      repository.findById.mockResolvedValue(os);
+      clienteRepository.findById.mockResolvedValue(cliente);
+
+      await expect(
+        service.assertOsPertenceAoCliente('os-123', 'joao@email.com'),
+      ).rejects.toThrow(OsNaoPertenceAoClienteError);
     });
   });
 });
