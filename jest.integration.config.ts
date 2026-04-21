@@ -7,11 +7,8 @@ const config: Config = {
   testRegex: '.*\\.(integration|e2e)\\.spec\\.ts$',
   transform: { '^.+\\.ts$': 'ts-jest' },
   collectCoverageFrom: [
-    '**/*.ts',
+    '**/infrastructure/prisma-*.repository.ts',
     '!**/generated/**',
-    '!main.ts',
-    '!**/*.module.ts',
-    '!**/test/**',
   ],
   coverageDirectory: '../coverage/integration',
   coverageThreshold: {
