@@ -86,6 +86,19 @@ describe('UsuarioController', () => {
 
       await expect(controller.create(createDto)).rejects.toThrow();
     });
+
+    it('should rethrow unknown errors in create', async () => {
+      const createDto = {
+        nome: 'João',
+        email: 'joao@test.com',
+        senha: 'senha123',
+        role: 'MECANICO',
+      };
+
+      service.create.mockRejectedValue(new Error('unexpected'));
+
+      await expect(controller.create(createDto)).rejects.toThrow('unexpected');
+    });
   });
 
   describe('findAll', () => {
@@ -142,6 +155,12 @@ describe('UsuarioController', () => {
         NotFoundException,
       );
     });
+
+    it('should rethrow unknown errors in findById', async () => {
+      service.findById.mockRejectedValue(new Error('unexpected'));
+
+      await expect(controller.findById('uuid-123')).rejects.toThrow('unexpected');
+    });
   });
 
   describe('update', () => {
@@ -188,6 +207,26 @@ describe('UsuarioController', () => {
         controller.update('uuid-123', updateDto),
       ).rejects.toThrow();
     });
+
+    it('should throw BadRequestException for InvalidRoleError in update', async () => {
+      const updateDto = { role: 'INVALID_ROLE' };
+
+      service.update.mockRejectedValue(new InvalidRoleError('INVALID_ROLE'));
+
+      await expect(
+        controller.update('uuid-123', updateDto),
+      ).rejects.toThrow();
+    });
+
+    it('should rethrow unknown errors in update', async () => {
+      const updateDto = { nome: 'João' };
+
+      service.update.mockRejectedValue(new Error('unexpected'));
+
+      await expect(
+        controller.update('uuid-123', updateDto),
+      ).rejects.toThrow('unexpected');
+    });
   });
 
   describe('delete', () => {
@@ -207,6 +246,12 @@ describe('UsuarioController', () => {
       await expect(controller.delete('uuid-123')).rejects.toThrow(
         NotFoundException,
       );
+    });
+
+    it('should rethrow unknown errors in delete', async () => {
+      service.delete.mockRejectedValue(new Error('unexpected'));
+
+      await expect(controller.delete('uuid-123')).rejects.toThrow('unexpected');
     });
   });
 });

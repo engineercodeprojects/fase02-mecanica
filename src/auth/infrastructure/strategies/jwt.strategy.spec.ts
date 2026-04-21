@@ -50,4 +50,16 @@ describe('JwtStrategy', () => {
       await expect(strategy.validate(payload)).rejects.toThrow(UnauthorizedException);
     });
   });
+
+  describe('constructor', () => {
+    it('should throw when JWT_SECRET is not configured', () => {
+      const configServiceWithoutSecret = {
+        get: jest.fn().mockReturnValue(undefined),
+      } as unknown as ConfigService;
+
+      expect(
+        () => new JwtStrategy(authService as unknown as AuthService, configServiceWithoutSecret),
+      ).toThrow('JWT_SECRET is required');
+    });
+  });
 });

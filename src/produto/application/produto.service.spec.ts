@@ -168,6 +168,11 @@ describe('ProdutoService', () => {
       const result = await service.addStock('1', 20);
       expect(result.quantidadeEstoque).toBe(70);
     });
+
+    it('should throw NotFoundException when produto not found in addStock', async () => {
+      mockRepository.findById.mockResolvedValue(null);
+      await expect(service.addStock('999', 10)).rejects.toThrow(NotFoundException);
+    });
   });
 
   describe('reserveStock', () => {

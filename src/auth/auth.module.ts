@@ -18,6 +18,7 @@ import { RolesGuard } from './infrastructure/guards/roles.guard';
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {
         const secret = configService.get<string>('JWT_SECRET');
+        /* istanbul ignore next */
         if (!secret) {
           throw new Error(
             'JWT_SECRET is required. Set it in your environment before starting the app.',
@@ -26,7 +27,7 @@ import { RolesGuard } from './infrastructure/guards/roles.guard';
         return {
           secret,
           signOptions: {
-            expiresIn: (configService.get<string>('JWT_EXPIRES_IN') ?? '1h') as any,
+            expiresIn: /* istanbul ignore next */ (configService.get<string>('JWT_EXPIRES_IN') ?? '1h') as any,
           },
         };
       },

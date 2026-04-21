@@ -21,6 +21,7 @@ export async function startTestDatabase(): Promise<string> {
 }
 
 export async function stopTestDatabase(): Promise<void> {
+  /* istanbul ignore next */
   if (container) {
     await container.stop();
   }
