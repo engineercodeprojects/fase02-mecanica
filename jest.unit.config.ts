@@ -12,6 +12,7 @@ const config: Config = {
     '!main.ts',
     '!**/*.module.ts',
     '!**/test/**',
+    '!**/*.spec.ts',
   ],
   coverageDirectory: '../coverage/unit',
   coverageThreshold: {
