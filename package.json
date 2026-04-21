@@ -9,7 +9,6 @@
     "start:dev": "ts-node -r tsconfig-paths/register src/main.ts",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:cov": "jest --coverage",
     "test:unit": "jest --config jest.unit.config.ts",
     "test:unit:cov": "jest --config jest.unit.config.ts --coverage",
     "test:integration": "jest --config jest.integration.config.ts",
