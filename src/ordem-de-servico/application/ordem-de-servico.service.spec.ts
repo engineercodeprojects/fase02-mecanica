@@ -21,6 +21,7 @@ import { CLIENTE_REPOSITORY, ClienteRepository } from '../../cliente/domain/clie
 import { VEICULO_REPOSITORY, VeiculoRepository } from '../../veiculo/domain/veiculo.repository';
 import { SERVICO_REPOSITORY, ServicoRepository } from '../../servico/domain/servico.repository';
 import { PRODUTO_REPOSITORY, ProdutoRepository } from '../../produto/domain/produto.repository';
+import { USUARIO_REPOSITORY, UsuarioRepository } from '../../usuario/domain/usuario.repository';
 import { OrdemDeServico } from '../domain/ordem-de-servico.entity';
 import { StatusOS } from '../domain/value-objects/status-os.vo';
 
@@ -31,6 +32,7 @@ describe('OrdemDeServicoService', () => {
   let veiculoRepository: jest.Mocked<VeiculoRepository>;
   let servicoRepository: jest.Mocked<ServicoRepository>;
   let produtoRepository: jest.Mocked<ProdutoRepository>;
+  let usuarioRepository: jest.Mocked<UsuarioRepository>;
 
   beforeEach(async () => {
     const mockOrdemRepository = {
@@ -81,6 +83,15 @@ describe('OrdemDeServicoService', () => {
       existsByNome: jest.fn(),
     };
 
+    const mockUsuarioRepository = {
+      findByEmail: jest.fn(),
+      findById: jest.fn(),
+      create: jest.fn(),
+      findAll: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OrdemDeServicoService,
@@ -104,6 +115,10 @@ describe('OrdemDeServicoService', () => {
           provide: PRODUTO_REPOSITORY,
           useValue: mockProdutoRepository,
         },
+        {
+          provide: USUARIO_REPOSITORY,
+          useValue: mockUsuarioRepository,
+        },
       ],
     }).compile();
 
@@ -122,6 +137,9 @@ describe('OrdemDeServicoService', () => {
     );
     produtoRepository = module.get<jest.Mocked<ProdutoRepository>>(
       PRODUTO_REPOSITORY,
+    );
+    usuarioRepository = module.get<jest.Mocked<UsuarioRepository>>(
+      USUARIO_REPOSITORY,
     );
   });
 

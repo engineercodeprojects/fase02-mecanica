@@ -4,6 +4,7 @@ import { ClienteModule } from '../cliente/cliente.module';
 import { VeiculoModule } from '../veiculo/veiculo.module';
 import { ServicoModule } from '../servico/servico.module';
 import { ProdutoModule } from '../produto/produto.module';
+import { UsuarioModule } from '../usuario/usuario.module';
 import { OrdemDeServicoService } from './application/ordem-de-servico.service';
 import { OrdemDeServicoController } from './infrastructure/ordem-de-servico.controller';
 import { ClienteOrdemDeServicoController } from './infrastructure/cliente-ordem-de-servico.controller';
@@ -11,7 +12,7 @@ import { PrismaOrdemDeServicoRepository } from './infrastructure/prisma-ordem-de
 import { ORDEM_DE_SERVICO_REPOSITORY } from './domain/ordem-de-servico.repository';
 
 @Module({
-  imports: [PrismaModule, ClienteModule, VeiculoModule, ServicoModule, ProdutoModule],
+  imports: [PrismaModule, ClienteModule, VeiculoModule, ServicoModule, ProdutoModule, UsuarioModule],
   controllers: [OrdemDeServicoController, ClienteOrdemDeServicoController],
   providers: [
     OrdemDeServicoService,

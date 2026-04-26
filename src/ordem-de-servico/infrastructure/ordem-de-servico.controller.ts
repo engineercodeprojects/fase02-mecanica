@@ -137,11 +137,11 @@ export class OrdemDeServicoController {
 
   @Get(':id')
   @Roles(Role.ADMIN, Role.ATENDENTE, Role.MECANICO)
-  @ApiOperation({ summary: 'Buscar ordem de servico por ID' })
-  @ApiOkResponse({ description: 'OS encontrada' })
+  @ApiOperation({ summary: 'Buscar detalhes da ordem de servico por ID' })
+  @ApiOkResponse({ description: 'Detalhes da OS (cabecalho, corpo, rodape)' })
   @ApiNotFoundResponse({ description: 'OS nao encontrada' })
   async findById(@Param('id', ParseUUIDPipe) id: string) {
-    return this.toResponse(await this.service.findById(id));
+    return this.service.findByIdDetalhado(id);
   }
 
   @Post(':id/atribuir-mecanico')

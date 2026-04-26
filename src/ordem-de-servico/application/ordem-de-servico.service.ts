@@ -23,6 +23,7 @@ import { ClienteRepository, CLIENTE_REPOSITORY } from '../../cliente/domain/clie
 import { VeiculoRepository, VEICULO_REPOSITORY } from '../../veiculo/domain/veiculo.repository';
 import { ServicoRepository, SERVICO_REPOSITORY } from '../../servico/domain/servico.repository';
 import { ProdutoRepository, PRODUTO_REPOSITORY } from '../../produto/domain/produto.repository';
+import { UsuarioRepository, USUARIO_REPOSITORY } from '../../usuario/domain/usuario.repository';
 
 @Injectable()
 export class OrdemDeServicoService {
@@ -37,6 +38,8 @@ export class OrdemDeServicoService {
     private readonly servicoRepository: ServicoRepository,
     @Inject(PRODUTO_REPOSITORY)
     private readonly produtoRepository: ProdutoRepository,
+    @Inject(USUARIO_REPOSITORY)
+    private readonly usuarioRepository: UsuarioRepository,
   ) {}
 
   async create(props: CreateOrdemDeServicoProps): Promise<OrdemDeServico> {
@@ -78,6 +81,86 @@ export class OrdemDeServicoService {
       );
     }
     return ordemDeServico;
+  }
+
+  async findByIdDetalhado(id: string): Promise<OsDetalhesView> {
+    const os = await this.findById(id);
+
+    const [cliente, veiculo, usuario] = await Promise.all([
+      this.clienteRepository.findById(os.clienteId),
+      this.veiculoRepository.findById(os.veiculoId),
+      os.usuarioId ? this.usuarioRepository.findById(os.usuarioId) : Promise.resolve(null),
+    ]);
+
+    const servicoIds = os.itensServico.map((i) => i.servicoId);
+    const produtoIds = os.itensProduto.map((i) => i.produtoId);
+    const [servicoNomeById, produtoNomeById] = await Promise.all([
+      this.loadServicoNomes(servicoIds),
+      this.loadProdutoNomes(produtoIds),
+    ]);
+
+    const servicos = os.itensServico.map((i) => ({
+      servicoId: i.servicoId,
+      descricaoServico: servicoNomeById.get(i.servicoId) ?? 'Servico removido do catalogo',
+      quantidade: i.quantidade,
+      precoUnitario: i.precoUnitario,
+      valorTotalDesseServico: i.subtotal(),
+    }));
+
+    const produtos = os.itensProduto.map((i) => ({
+      produtoId: i.produtoId,
+      descricaoProduto: produtoNomeById.get(i.produtoId) ?? 'Produto removido do catalogo',
+      quantidade: i.quantidade,
+      precoUnitario: i.precoUnitario,
+      valorTotalDesseProduto: i.subtotal(),
+    }));
+
+    const valorTotalServicos = os.valorTotalServicos();
+    const valorTotalProdutos = os.valorTotalProdutos();
+
+    return {
+      cabecalho: {
+        dadosCliente: {
+          id: cliente?.id ?? os.clienteId,
+          nome: cliente?.nome ?? 'Cliente removido',
+          cpfCnpj: cliente?.cpfCnpj?.value ?? '',
+          email: cliente?.email ?? null,
+          telefone: cliente?.telefone ?? '',
+        },
+        dadosVeiculo: {
+          id: veiculo?.id ?? os.veiculoId,
+          placa: veiculo?.placa?.value ?? '',
+          marca: veiculo?.marca ?? '',
+          modelo: veiculo?.modelo ?? '',
+          ano: veiculo?.ano ?? 0,
+        },
+        status: os.status,
+        mecanicoAtribuido: usuario?.nome ?? null,
+        dataHoraAbertura: this.formatDateTime(os.createdAt),
+        dataHoraUltimaAtualizacao: this.formatDateTime(os.updatedAt),
+      },
+      corpo: {
+        diagnostico: os.diagnostico,
+        servicos,
+        produtos,
+      },
+      rodape: {
+        valorTotalServicos,
+        valorTotalProdutos,
+        valorTotalOrdemServico: valorTotalServicos + valorTotalProdutos,
+      },
+    };
+  }
+
+  private formatDateTime(date: Date | undefined): string | null {
+    if (!date) return null;
+    const d = new Date(date);
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${day}/${month}/${year} - ${hours}:${minutes}`;
   }
 
   async atribuirMecanico(
@@ -332,4 +415,57 @@ export interface OsHistoryItem {
   descricaoInicial: string;
   createdAt: Date | undefined;
   updatedAt: Date | undefined;
+}
+
+export interface OsDetalhesClienteView {
+  id: string;
+  nome: string;
+  cpfCnpj: string;
+  email: string | null | undefined;
+  telefone: string;
+}
+
+export interface OsDetalhesVeiculoView {
+  id: string;
+  placa: string;
+  marca: string;
+  modelo: string;
+  ano: number;
+}
+
+export interface OsDetalhesServicoItem {
+  servicoId: string;
+  descricaoServico: string;
+  quantidade: number;
+  precoUnitario: number;
+  valorTotalDesseServico: number;
+}
+
+export interface OsDetalhesProdutoItem {
+  produtoId: string;
+  descricaoProduto: string;
+  quantidade: number;
+  precoUnitario: number;
+  valorTotalDesseProduto: number;
+}
+
+export interface OsDetalhesView {
+  cabecalho: {
+    dadosCliente: OsDetalhesClienteView;
+    dadosVeiculo: OsDetalhesVeiculoView;
+    status: string;
+    mecanicoAtribuido: string | null;
+    dataHoraAbertura: string | null;
+    dataHoraUltimaAtualizacao: string | null;
+  };
+  corpo: {
+    diagnostico: string | null;
+    servicos: OsDetalhesServicoItem[];
+    produtos: OsDetalhesProdutoItem[];
+  };
+  rodape: {
+    valorTotalServicos: number;
+    valorTotalProdutos: number;
+    valorTotalOrdemServico: number;
+  };
 }

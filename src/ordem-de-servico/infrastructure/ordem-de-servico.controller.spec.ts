@@ -68,10 +68,44 @@ const mockOsWithProdutos = OrdemDeServico.reconstitute({
   itensProduto: [new ItemProdutoOS('produto-abc', 3, 25)],
 });
 
+const mockDetalhesView = {
+  cabecalho: {
+    dadosCliente: {
+      id: 'cliente-123',
+      nome: 'Jones',
+      cpfCnpj: '12345678900',
+      email: 'jones@email.com',
+      telefone: '112233-4455',
+    },
+    dadosVeiculo: {
+      id: 'veiculo-456',
+      placa: 'ABC1234',
+      marca: 'Fiat',
+      modelo: 'UNO',
+      ano: 2010,
+    },
+    status: 'RECEBIDA',
+    mecanicoAtribuido: null,
+    dataHoraAbertura: '01/01/2026 - 00:00',
+    dataHoraUltimaAtualizacao: '01/01/2026 - 00:00',
+  },
+  corpo: {
+    diagnostico: null,
+    servicos: [],
+    produtos: [],
+  },
+  rodape: {
+    valorTotalServicos: 0,
+    valorTotalProdutos: 0,
+    valorTotalOrdemServico: 0,
+  },
+};
+
 const mockService = {
   create: jest.fn(),
   findAll: jest.fn(),
   findById: jest.fn(),
+  findByIdDetalhado: jest.fn(),
   atribuirMecanico: jest.fn(),
   completarDiagnostico: jest.fn(),
   assertOsPertenceAoCliente: jest.fn(),
@@ -198,13 +232,16 @@ describe('OrdemDeServicoController', () => {
   // ==================== GET /ordens-servico/:id ====================
 
   describe('findById', () => {
-    it('should return OS response when found', async () => {
-      mockService.findById.mockResolvedValue(mockOs);
+    it('should return detailed OS view when found', async () => {
+      mockService.findByIdDetalhado.mockResolvedValue(mockDetalhesView);
 
       const result = await controller.findById('os-123');
 
-      expect(result.id).toBe('os-123');
-      expect(mockService.findById).toHaveBeenCalledWith('os-123');
+      expect(result.cabecalho.dadosCliente.id).toBe('cliente-123');
+      expect(result.cabecalho.dadosVeiculo.id).toBe('veiculo-456');
+      expect(result.cabecalho.status).toBe('RECEBIDA');
+      expect(result.rodape.valorTotalOrdemServico).toBe(0);
+      expect(mockService.findByIdDetalhado).toHaveBeenCalledWith('os-123');
     });
   });
 
