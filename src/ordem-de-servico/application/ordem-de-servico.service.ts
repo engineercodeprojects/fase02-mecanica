@@ -14,12 +14,15 @@ import { VeiculoNotFoundError } from '../domain/errors/veiculo-not-found.error';
 import { VeiculoClienteMismatchError } from '../domain/errors/veiculo-cliente-mismatch.error';
 import { OsNotOwnedByClienteError } from '../domain/errors/os-not-owned-by-cliente.error';
 import { ServicoNotFoundInCatalogError } from '../domain/errors/servico-not-found-in-catalog.error';
+import { ProdutoNotFoundInCatalogError } from '../domain/errors/produto-not-found-in-catalog.error';
 import { OrdemDeServicoNotFoundError } from '../domain/errors/ordem-de-servico-not-found.error';
 import { ClienteNotOwnedByUsuarioError } from '../domain/errors/cliente-not-owned-by-usuario.error';
 import { ItemServicoOS } from '../domain/value-objects/item-servico-os.vo';
+import { ItemProdutoOS } from '../domain/value-objects/item-produto-os.vo';
 import { ClienteRepository, CLIENTE_REPOSITORY } from '../../cliente/domain/cliente.repository';
 import { VeiculoRepository, VEICULO_REPOSITORY } from '../../veiculo/domain/veiculo.repository';
 import { ServicoRepository, SERVICO_REPOSITORY } from '../../servico/domain/servico.repository';
+import { ProdutoRepository, PRODUTO_REPOSITORY } from '../../produto/domain/produto.repository';
 
 @Injectable()
 export class OrdemDeServicoService {
@@ -32,6 +35,8 @@ export class OrdemDeServicoService {
     private readonly veiculoRepository: VeiculoRepository,
     @Inject(SERVICO_REPOSITORY)
     private readonly servicoRepository: ServicoRepository,
+    @Inject(PRODUTO_REPOSITORY)
+    private readonly produtoRepository: ProdutoRepository,
   ) {}
 
   async create(props: CreateOrdemDeServicoProps): Promise<OrdemDeServico> {
@@ -164,6 +169,31 @@ export class OrdemDeServicoService {
     return this.repository.update(ordemDeServico);
   }
 
+  async adicionarProduto(
+    id: string,
+    produtoId: string,
+    quantidade: number,
+  ): Promise<OrdemDeServico> {
+    const ordemDeServico = await this.findById(id);
+    const produto = await this.produtoRepository.findById(produtoId);
+    if (!produto) {
+      throw new ProdutoNotFoundInCatalogError(produtoId);
+    }
+    const item = new ItemProdutoOS(
+      produtoId,
+      quantidade,
+      produto.precoUnitario.value,
+    );
+    ordemDeServico.adicionarProduto(item);
+    return this.repository.update(ordemDeServico);
+  }
+
+  async removerProduto(id: string, produtoId: string): Promise<OrdemDeServico> {
+    const ordemDeServico = await this.findById(id);
+    ordemDeServico.removerProduto(produtoId);
+    return this.repository.update(ordemDeServico);
+  }
+
   async findStatusByNumero(numero: string): Promise<OsStatusView> {
     const ordemDeServico = await this.repository.findByNumero(numero);
     if (!ordemDeServico) {
@@ -181,8 +211,19 @@ export class OrdemDeServicoService {
       subtotal: i.subtotal(),
     }));
 
+    const produtoIds = ordemDeServico.itensProduto.map((i) => i.produtoId);
+    const produtoNomeById = await this.loadProdutoNomes(produtoIds);
+
+    const produtos = ordemDeServico.itensProduto.map((i) => ({
+      produtoId: i.produtoId,
+      nome: produtoNomeById.get(i.produtoId) ?? 'Produto removido do catalogo',
+      quantidade: i.quantidade,
+      precoUnitario: i.precoUnitario,
+      subtotal: i.subtotal(),
+    }));
+
     const valorTotalServicos = ordemDeServico.valorTotalServicos();
-    const valorTotalProdutos = 0;
+    const valorTotalProdutos = ordemDeServico.valorTotalProdutos();
 
     return {
       numero: ordemDeServico.numero,
@@ -190,7 +231,7 @@ export class OrdemDeServicoService {
       descricaoInicial: ordemDeServico.descricaoInicial,
       diagnostico: ordemDeServico.diagnostico,
       servicos,
-      produtos: [],
+      produtos,
       valorTotalServicos,
       valorTotalProdutos,
       valorTotal: valorTotalServicos + valorTotalProdutos,
@@ -241,10 +282,30 @@ export class OrdemDeServicoService {
     );
     return map;
   }
+
+  private async loadProdutoNomes(produtoIds: string[]): Promise<Map<string, string>> {
+    const unique = Array.from(new Set(produtoIds));
+    const map = new Map<string, string>();
+    await Promise.all(
+      unique.map(async (id) => {
+        const p = await this.produtoRepository.findById(id);
+        if (p) map.set(id, p.nome);
+      }),
+    );
+    return map;
+  }
 }
 
 export interface OsStatusServico {
   servicoId: string;
+  nome: string;
+  quantidade: number;
+  precoUnitario: number;
+  subtotal: number;
+}
+
+export interface OsStatusProduto {
+  produtoId: string;
   nome: string;
   quantidade: number;
   precoUnitario: number;
@@ -257,7 +318,7 @@ export interface OsStatusView {
   descricaoInicial: string;
   diagnostico: string | null;
   servicos: OsStatusServico[];
-  produtos: unknown[];
+  produtos: OsStatusProduto[];
   valorTotalServicos: number;
   valorTotalProdutos: number;
   valorTotal: number;

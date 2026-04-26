@@ -1,9 +1,12 @@
 import { StatusOS, StatusOSVO } from './value-objects/status-os.vo';
 import { ItemServicoOS } from './value-objects/item-servico-os.vo';
+import { ItemProdutoOS } from './value-objects/item-produto-os.vo';
 import { InvalidDescriptionError } from './errors/invalid-description.error';
 import { InvalidStatusTransitionError } from './errors/invalid-status-transition.error';
 import { ServicoAlreadyAddedError } from './errors/servico-already-added.error';
 import { ServicoNotAddedError } from './errors/servico-not-added.error';
+import { ProdutoAlreadyAddedError } from './errors/produto-already-added.error';
+import { ProdutoNotAddedError } from './errors/produto-not-added.error';
 
 export interface CreateOrdemDeServicoProps {
   clienteId: string;
@@ -23,6 +26,7 @@ export interface ReconstituteOrdemDeServicoProps {
   createdAt: Date;
   updatedAt: Date;
   itensServico?: ItemServicoOS[];
+  itensProduto?: ItemProdutoOS[];
 }
 
 export class OrdemDeServico {
@@ -35,6 +39,7 @@ export class OrdemDeServico {
   private _diagnostico: string | null;
   private _status: StatusOSVO;
   private _itensServico: ItemServicoOS[];
+  private _itensProduto: ItemProdutoOS[];
   private _createdAt?: Date;
   private _updatedAt?: Date;
 
@@ -48,6 +53,7 @@ export class OrdemDeServico {
       diagnostico: string | null;
       status: StatusOSVO;
       itensServico?: ItemServicoOS[];
+      itensProduto?: ItemProdutoOS[];
       createdAt?: Date;
       updatedAt?: Date;
     },
@@ -62,6 +68,7 @@ export class OrdemDeServico {
     this._diagnostico = props.diagnostico;
     this._status = props.status;
     this._itensServico = props.itensServico ?? [];
+    this._itensProduto = props.itensProduto ?? [];
     this._createdAt = props.createdAt;
     this._updatedAt = props.updatedAt;
   }
@@ -93,6 +100,7 @@ export class OrdemDeServico {
         diagnostico: props.diagnostico,
         status: StatusOSVO.create(props.status),
         itensServico: props.itensServico,
+        itensProduto: props.itensProduto,
         createdAt: props.createdAt,
         updatedAt: props.updatedAt,
       },
@@ -182,6 +190,34 @@ export class OrdemDeServico {
     );
   }
 
+  adicionarProduto(item: ItemProdutoOS): void {
+    if (!this._status.equals(StatusOSVO.create(StatusOS.EM_DIAGNOSTICO))) {
+      throw new InvalidStatusTransitionError(
+        this._status.toString(),
+        'adicionar produto',
+      );
+    }
+    if (this._itensProduto.some((i) => i.produtoId === item.produtoId)) {
+      throw new ProdutoAlreadyAddedError(item.produtoId);
+    }
+    this._itensProduto = [...this._itensProduto, item];
+  }
+
+  removerProduto(produtoId: string): void {
+    if (!this._status.equals(StatusOSVO.create(StatusOS.EM_DIAGNOSTICO))) {
+      throw new InvalidStatusTransitionError(
+        this._status.toString(),
+        'remover produto',
+      );
+    }
+    if (!this._itensProduto.some((i) => i.produtoId === produtoId)) {
+      throw new ProdutoNotAddedError(produtoId);
+    }
+    this._itensProduto = this._itensProduto.filter(
+      (i) => i.produtoId !== produtoId,
+    );
+  }
+
   aprovar(): void {
     if (
       !this._status.equals(StatusOSVO.create(StatusOS.AGUARDANDO_APROVACAO))
@@ -258,8 +294,16 @@ export class OrdemDeServico {
     return this._itensServico;
   }
 
+  get itensProduto(): ReadonlyArray<ItemProdutoOS> {
+    return this._itensProduto;
+  }
+
   valorTotalServicos(): number {
     return this._itensServico.reduce((sum, i) => sum + i.subtotal(), 0);
+  }
+
+  valorTotalProdutos(): number {
+    return this._itensProduto.reduce((sum, i) => sum + i.subtotal(), 0);
   }
 
   get createdAt(): Date | undefined {

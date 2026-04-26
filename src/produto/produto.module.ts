@@ -13,6 +13,6 @@ import { PRODUTO_REPOSITORY } from './domain/produto.repository';
       useClass: PrismaProdutoRepository,
     },
   ],
-  exports: [ProdutoService],
+  exports: [ProdutoService, PRODUTO_REPOSITORY],
 })
 export class ProdutoModule {}

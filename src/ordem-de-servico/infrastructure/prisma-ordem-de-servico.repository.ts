@@ -8,8 +8,9 @@ import {
 import { OrdemDeServico } from '../domain/ordem-de-servico.entity';
 import { StatusOS } from '../domain/value-objects/status-os.vo';
 import { ItemServicoOS } from '../domain/value-objects/item-servico-os.vo';
+import { ItemProdutoOS } from '../domain/value-objects/item-produto-os.vo';
 
-const INCLUDE_ITENS = { itensServico: true } as const;
+const INCLUDE_ITENS = { itensServico: true, itensProduto: true } as const;
 
 @Injectable()
 export class PrismaOrdemDeServicoRepository
@@ -102,6 +103,19 @@ export class PrismaOrdemDeServicoRepository
           })),
         });
       }
+      await tx.itemOrdemDeServicoProduto.deleteMany({
+        where: { ordemDeServicoId: os.id },
+      });
+      if (os.itensProduto.length > 0) {
+        await tx.itemOrdemDeServicoProduto.createMany({
+          data: os.itensProduto.map((item) => ({
+            ordemDeServicoId: os.id as string,
+            produtoId: item.produtoId,
+            quantidade: item.quantidade,
+            precoUnitario: item.precoUnitario,
+          })),
+        });
+      }
       return tx.ordemDeServico.findUnique({
         where: { id: os.id },
         include: INCLUDE_ITENS,
@@ -128,6 +142,10 @@ export class PrismaOrdemDeServicoRepository
       (i: any) =>
         new ItemServicoOS(i.servicoId, i.quantidade, Number(i.precoUnitario)),
     );
+    const itensProduto: ItemProdutoOS[] = (data.itensProduto ?? []).map(
+      (i: any) =>
+        new ItemProdutoOS(i.produtoId, i.quantidade, Number(i.precoUnitario)),
+    );
     return OrdemDeServico.reconstitute({
       id: data.id,
       numero: data.numero,
@@ -140,6 +158,7 @@ export class PrismaOrdemDeServicoRepository
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
       itensServico,
+      itensProduto,
     });
   }
 }
