@@ -185,6 +185,7 @@ export class OrdemDeServicoService {
     const valorTotalProdutos = 0;
 
     return {
+      id: ordemDeServico.id!,
       numero: ordemDeServico.numero,
       status: ordemDeServico.status,
       descricaoInicial: ordemDeServico.descricaoInicial,
@@ -252,6 +253,7 @@ export interface OsStatusServico {
 }
 
 export interface OsStatusView {
+  id: string;
   numero: string;
   status: string;
   descricaoInicial: string;
