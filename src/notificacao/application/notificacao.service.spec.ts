@@ -9,6 +9,7 @@ import { StatusNotificacao } from '../domain/value-objects/status-notificacao.vo
 import { TipoNotificacao } from '../domain/value-objects/tipo-notificacao.vo';
 import { NOTIFICADOR, Notificador } from './ports/notificador.port';
 import { NotificacaoService } from './notificacao.service';
+import { CLIENTE_REPOSITORY } from '../../cliente/domain/cliente.repository';
 
 describe('NotificacaoService', () => {
   let service: NotificacaoService;
@@ -44,6 +45,7 @@ describe('NotificacaoService', () => {
         NotificacaoService,
         { provide: NOTIFICACAO_REPOSITORY, useValue: repository },
         { provide: NOTIFICADOR, useValue: [emailNotificador] },
+        { provide: CLIENTE_REPOSITORY, useValue: { findByCpfCnpj: jest.fn() } },
       ],
     }).compile();
 
@@ -67,6 +69,7 @@ describe('NotificacaoService', () => {
             NotificacaoService,
             { provide: NOTIFICACAO_REPOSITORY, useValue: repository },
             { provide: NOTIFICADOR, useValue: [dupA, dupB] },
+            { provide: CLIENTE_REPOSITORY, useValue: { findByCpfCnpj: jest.fn() } },
           ],
         }).compile(),
       ).rejects.toThrow(/duplicados/);
@@ -111,6 +114,7 @@ describe('NotificacaoService', () => {
             NotificacaoService,
             { provide: NOTIFICACAO_REPOSITORY, useValue: repository },
             { provide: NOTIFICADOR, useValue: [] },
+            { provide: CLIENTE_REPOSITORY, useValue: { findByCpfCnpj: jest.fn() } },
           ],
         }).compile();
       const svc = moduleSemNotificador.get(NotificacaoService);

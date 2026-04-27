@@ -9,6 +9,12 @@ import {
 import { CanalNotificacao } from '../domain/value-objects/canal-notificacao.vo';
 import { TipoNotificacao } from '../domain/value-objects/tipo-notificacao.vo';
 import { NOTIFICADOR, Notificador } from './ports/notificador.port';
+import {
+  CLIENTE_REPOSITORY,
+  ClienteRepository,
+} from '../../cliente/domain/cliente.repository';
+import { ClienteNotFoundError } from '../../ordem-de-servico/domain/errors/cliente-not-found.error';
+import { ClienteNotOwnedByUsuarioError } from '../../ordem-de-servico/domain/errors/cliente-not-owned-by-usuario.error';
 
 export interface EnviarNotificacaoInput {
   clienteId: string;
@@ -30,6 +36,8 @@ export class NotificacaoService {
     private readonly repository: NotificacaoRepository,
     @Inject(NOTIFICADOR)
     notificadores: Notificador[],
+    @Inject(CLIENTE_REPOSITORY)
+    private readonly clienteRepository: ClienteRepository,
   ) {
     this.notificadoresPorCanal = new Map(
       notificadores.map((n) => [n.canal, n]),
@@ -81,5 +89,27 @@ export class NotificacaoService {
 
   async findAll(params: FindAllParams): Promise<PaginatedResult<Notificacao>> {
     return this.repository.findAll(params);
+  }
+
+  async findByCpfCnpj(
+    cpfCnpj: string,
+    emailCliente: string,
+    params: { page?: number; limit?: number } = {},
+  ): Promise<PaginatedResult<Notificacao>> {
+    const cliente = await this.clienteRepository.findByCpfCnpj(cpfCnpj);
+    if (!cliente) {
+      throw new ClienteNotFoundError(cpfCnpj);
+    }
+    if (
+      !cliente.email ||
+      cliente.email.toLowerCase() !== emailCliente.toLowerCase()
+    ) {
+      throw new ClienteNotOwnedByUsuarioError(cpfCnpj);
+    }
+    return this.repository.findAll({
+      clienteId: cliente.id,
+      page: params.page ?? 1,
+      limit: params.limit ?? 20,
+    });
   }
 }

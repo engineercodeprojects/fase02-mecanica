@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { LoginPage } from '@/pages/login';
 import { MinhasOsPage } from '@/pages/minhas-os';
 import { OsDetalhePage } from '@/pages/os-detalhe';
+import { NotificacoesPage } from '@/pages/notificacoes';
 import { Toaster } from '@/components/toast';
 import { useAuthStore } from '@/lib/auth-store';
 import { ClienteShell } from '@/components/shell';
@@ -37,6 +38,7 @@ export function App() {
         >
           <Route index element={<MinhasOsPage />} />
           <Route path="ordens/:numero" element={<OsDetalhePage />} />
+          <Route path="notificacoes" element={<NotificacoesPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
