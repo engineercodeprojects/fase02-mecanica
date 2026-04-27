@@ -29,10 +29,35 @@ services:
       JWT_SECRET: '${JWT_SECRET:?JWT_SECRET is required — set it in .env or your shell env}'
       JWT_EXPIRES_IN: '${JWT_EXPIRES_IN:-1h}'
       PUBLIC_BASE_URL: '${PUBLIC_BASE_URL:-http://localhost:3000}'
+      WEB_ORIGINS: '${WEB_ORIGINS:-http://localhost:5173,http://localhost:5174,http://localhost:8080,http://localhost:8081}'
     depends_on:
       postgres:
         condition: service_healthy
     entrypoint: ['sh', '-c', 'npx prisma migrate deploy && node dist/main.js']
+
+  web-admin:
+    build:
+      context: ./web/admin
+      args:
+        VITE_API_URL: '${VITE_API_URL:-http://localhost:3000}'
+    container_name: oficina_mecanica_web_admin
+    restart: unless-stopped
+    ports:
+      - '8080:80'
+    depends_on:
+      - app
+
+  web-cliente:
+    build:
+      context: ./web/cliente
+      args:
+        VITE_API_URL: '${VITE_API_URL:-http://localhost:3000}'
+    container_name: oficina_mecanica_web_cliente
+    restart: unless-stopped
+    ports:
+      - '8081:80'
+    depends_on:
+      - app
 
 volumes:
   pgdata:

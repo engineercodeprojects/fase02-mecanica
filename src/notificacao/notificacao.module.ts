@@ -6,12 +6,13 @@ import { OrdemDeServicoNotificacaoListener } from './application/listeners/ordem
 import { NOTIFICADOR } from './application/ports/notificador.port';
 import { NOTIFICACAO_REPOSITORY } from './domain/notificacao.repository';
 import { MockEmailNotificador } from './infrastructure/mock-notificador.adapter';
+import { ClienteNotificacaoController } from './infrastructure/cliente-notificacao.controller';
 import { NotificacaoController } from './infrastructure/notificacao.controller';
 import { PrismaNotificacaoRepository } from './infrastructure/prisma-notificacao.repository';
 
 @Module({
   imports: [PrismaModule, ClienteModule],
-  controllers: [NotificacaoController],
+  controllers: [NotificacaoController, ClienteNotificacaoController],
   providers: [
     NotificacaoService,
     OrdemDeServicoNotificacaoListener,
