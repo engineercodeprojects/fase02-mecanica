@@ -43,7 +43,7 @@ services:
     container_name: oficina_mecanica_web_admin
     restart: unless-stopped
     ports:
-      - '8080:80'
+      - '8080:8080'
     depends_on:
       - app
 
@@ -55,7 +55,7 @@ services:
     container_name: oficina_mecanica_web_cliente
     restart: unless-stopped
     ports:
-      - '8081:80'
+      - '8081:8080'
     depends_on:
       - app
 
