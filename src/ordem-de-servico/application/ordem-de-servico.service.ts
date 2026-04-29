@@ -1,4 +1,5 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   OrdemDeServico,
   CreateOrdemDeServicoProps,
@@ -19,6 +20,8 @@ import { OrdemDeServicoNotFoundError } from '../domain/errors/ordem-de-servico-n
 import { ClienteNotOwnedByUsuarioError } from '../domain/errors/cliente-not-owned-by-usuario.error';
 import { ItemServicoOS } from '../domain/value-objects/item-servico-os.vo';
 import { ItemProdutoOS } from '../domain/value-objects/item-produto-os.vo';
+import { OrcamentoProntoEvent } from '../domain/events/orcamento-pronto.event';
+import { OsFinalizadaEvent } from '../domain/events/os-finalizada.event';
 import { ClienteRepository, CLIENTE_REPOSITORY } from '../../cliente/domain/cliente.repository';
 import { VeiculoRepository, VEICULO_REPOSITORY } from '../../veiculo/domain/veiculo.repository';
 import { ServicoRepository, SERVICO_REPOSITORY } from '../../servico/domain/servico.repository';
@@ -40,6 +43,7 @@ export class OrdemDeServicoService {
     private readonly produtoRepository: ProdutoRepository,
     @Inject(USUARIO_REPOSITORY)
     private readonly usuarioRepository: UsuarioRepository,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async create(props: CreateOrdemDeServicoProps): Promise<OrdemDeServico> {
@@ -178,7 +182,18 @@ export class OrdemDeServicoService {
   ): Promise<OrdemDeServico> {
     const ordemDeServico = await this.findById(id);
     ordemDeServico.completarDiagnostico(diagnostico);
-    return this.repository.update(ordemDeServico);
+    const updated = await this.repository.update(ordemDeServico);
+    this.eventEmitter.emit(
+      OrcamentoProntoEvent.EVENT_NAME,
+      new OrcamentoProntoEvent(
+        updated.id!,
+        updated.numero,
+        updated.clienteId,
+        updated.diagnostico ?? '',
+        updated.valorTotalServicos(),
+      ),
+    );
+    return updated;
   }
 
   async aprovarOrcamento(id: string): Promise<OrdemDeServico> {
@@ -210,10 +225,41 @@ export class OrdemDeServicoService {
     }
   }
 
+  async iniciarServico(
+    osId: string,
+    servicoId: string,
+  ): Promise<OrdemDeServico> {
+    const ordemDeServico = await this.findById(osId);
+    ordemDeServico.iniciarServico(servicoId);
+    return this.repository.update(ordemDeServico);
+  }
+
+  async concluirServico(
+    osId: string,
+    servicoId: string,
+    horasTrabalhadas: number,
+  ): Promise<OrdemDeServico> {
+    const ordemDeServico = await this.findById(osId);
+    ordemDeServico.concluirServico(servicoId, horasTrabalhadas);
+    const updated = await this.repository.update(ordemDeServico);
+    if (updated.status === 'FINALIZADA') {
+      this.eventEmitter.emit(
+        OsFinalizadaEvent.EVENT_NAME,
+        new OsFinalizadaEvent(updated.id!, updated.numero, updated.clienteId),
+      );
+    }
+    return updated;
+  }
+
   async finalizarExecucao(id: string): Promise<OrdemDeServico> {
     const ordemDeServico = await this.findById(id);
     ordemDeServico.finalizarExecucao();
-    return this.repository.update(ordemDeServico);
+    const updated = await this.repository.update(ordemDeServico);
+    this.eventEmitter.emit(
+      OsFinalizadaEvent.EVENT_NAME,
+      new OsFinalizadaEvent(updated.id!, updated.numero, updated.clienteId),
+    );
+    return updated;
   }
 
   async entregar(id: string): Promise<OrdemDeServico> {
@@ -309,6 +355,7 @@ export class OrdemDeServicoService {
     const valorTotalProdutos = ordemDeServico.valorTotalProdutos();
 
     return {
+      id: ordemDeServico.id!,
       numero: ordemDeServico.numero,
       status: ordemDeServico.status,
       descricaoInicial: ordemDeServico.descricaoInicial,
@@ -396,6 +443,7 @@ export interface OsStatusProduto {
 }
 
 export interface OsStatusView {
+  id: string;
   numero: string;
   status: string;
   descricaoInicial: string;

@@ -1,10 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { OrdemDeServicoService } from './ordem-de-servico.service';
 import {
   ORDEM_DE_SERVICO_REPOSITORY,
   OrdemDeServicoRepository,
 } from '../domain/ordem-de-servico.repository';
+import { ItemServicoInvalidStatusError } from '../domain/errors/item-servico-invalid-status.error';
+import { ServicoNotAddedError } from '../domain/errors/servico-not-added.error';
+import { OsFinalizadaEvent } from '../domain/events/os-finalizada.event';
 import { ClienteNotFoundError } from '../domain/errors/cliente-not-found.error';
 import { VeiculoNotFoundError } from '../domain/errors/veiculo-not-found.error';
 import { VeiculoClienteMismatchError } from '../domain/errors/veiculo-cliente-mismatch.error';
@@ -118,6 +122,10 @@ describe('OrdemDeServicoService', () => {
         {
           provide: USUARIO_REPOSITORY,
           useValue: mockUsuarioRepository,
+        },
+        {
+          provide: EventEmitter2,
+          useValue: { emit: jest.fn() },
         },
       ],
     }).compile();
@@ -972,6 +980,154 @@ describe('OrdemDeServicoService', () => {
       const view = await service.findStatusByNumero('OS-2026-1234567890-0001');
 
       expect(view.produtos[0].nome).toBe('Produto removido do catalogo');
+    });
+  });
+
+  const makeOsEmExecucao = (itens: ItemServicoOS[] = []) =>
+    OrdemDeServico.reconstitute({
+      id: 'os-exec-1',
+      numero: 'OS-2026-99999',
+      clienteId: 'cliente-123',
+      veiculoId: 'veiculo-456',
+      usuarioId: 'mecanico-1',
+      descricaoInicial: 'Revisao completa',
+      diagnostico: 'Oleo e pastilhas',
+      status: StatusOS.EM_EXECUCAO,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      itensServico: itens,
+    });
+
+  describe('iniciarServico (US-14)', () => {
+    it('should start service execution and persist', async () => {
+      const os = makeOsEmExecucao([new ItemServicoOS('s-1', 1, 100)]);
+      repository.findById.mockResolvedValue(os);
+      repository.update.mockImplementation(async (o) => o);
+
+      const result = await service.iniciarServico('os-exec-1', 's-1');
+
+      expect(result.itensServico[0].statusExecucao).toBe('EM_EXECUCAO');
+      expect(repository.update).toHaveBeenCalledWith(os);
+    });
+
+    it('should throw NotFoundException when OS does not exist', async () => {
+      repository.findById.mockResolvedValue(null);
+
+      await expect(service.iniciarServico('inexistente', 's-1')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('should propagate ServicoNotAddedError from domain', async () => {
+      const os = makeOsEmExecucao([new ItemServicoOS('s-1', 1, 100)]);
+      repository.findById.mockResolvedValue(os);
+
+      await expect(
+        service.iniciarServico('os-exec-1', 's-inexistente'),
+      ).rejects.toThrow(ServicoNotAddedError);
+      expect(repository.update).not.toHaveBeenCalled();
+    });
+
+    it('should propagate ItemServicoInvalidStatusError when item is not PENDENTE', async () => {
+      const os = makeOsEmExecucao([
+        new ItemServicoOS('s-1', 1, 100, 'EM_EXECUCAO', new Date()),
+      ]);
+      repository.findById.mockResolvedValue(os);
+
+      await expect(
+        service.iniciarServico('os-exec-1', 's-1'),
+      ).rejects.toThrow(ItemServicoInvalidStatusError);
+      expect(repository.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('concluirServico (US-14)', () => {
+    let eventEmitter: jest.Mocked<{ emit: jest.Mock }>;
+
+    beforeEach(async () => {
+      eventEmitter = (service as any).eventEmitter;
+      jest.clearAllMocks();
+    });
+
+    it('should complete service execution and persist', async () => {
+      const os = makeOsEmExecucao([
+        new ItemServicoOS('s-1', 1, 100, 'EM_EXECUCAO', new Date()),
+        new ItemServicoOS('s-2', 1, 50, 'EM_EXECUCAO', new Date()),
+      ]);
+      repository.findById.mockResolvedValue(os);
+      repository.update.mockImplementation(async (o) => o);
+
+      const result = await service.concluirServico('os-exec-1', 's-1', 2.5);
+
+      expect(result.itensServico[0].statusExecucao).toBe('CONCLUIDO');
+      expect(result.itensServico[0].horasTrabalhadas).toBe(2.5);
+      expect(repository.update).toHaveBeenCalled();
+    });
+
+    it('should NOT emit OsFinalizadaEvent when not all services are done', async () => {
+      const os = makeOsEmExecucao([
+        new ItemServicoOS('s-1', 1, 100, 'EM_EXECUCAO', new Date()),
+        new ItemServicoOS('s-2', 1, 50),
+      ]);
+      const updated = makeOsEmExecucao([
+        new ItemServicoOS('s-1', 1, 100, 'CONCLUIDO', new Date(), new Date(), 1),
+        new ItemServicoOS('s-2', 1, 50),
+      ]);
+      repository.findById.mockResolvedValue(os);
+      repository.update.mockResolvedValue(updated);
+
+      const emitSpy = jest.spyOn((service as any).eventEmitter, 'emit');
+
+      await service.concluirServico('os-exec-1', 's-1', 1);
+
+      expect(emitSpy).not.toHaveBeenCalled();
+    });
+
+    it('should emit OsFinalizadaEvent when all services are concluded', async () => {
+      const os = makeOsEmExecucao([
+        new ItemServicoOS('s-1', 1, 100, 'EM_EXECUCAO', new Date()),
+      ]);
+      repository.findById.mockResolvedValue(os);
+      repository.update.mockImplementation(async (o) => o);
+
+      const emitSpy = jest.spyOn((service as any).eventEmitter, 'emit');
+
+      await service.concluirServico('os-exec-1', 's-1', 1.5);
+
+      expect(emitSpy).toHaveBeenCalledWith(
+        OsFinalizadaEvent.EVENT_NAME,
+        expect.any(OsFinalizadaEvent),
+      );
+    });
+
+    it('should throw NotFoundException when OS does not exist', async () => {
+      repository.findById.mockResolvedValue(null);
+
+      await expect(
+        service.concluirServico('inexistente', 's-1', 1),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should propagate ServicoNotAddedError from domain', async () => {
+      const os = makeOsEmExecucao([
+        new ItemServicoOS('s-1', 1, 100, 'EM_EXECUCAO', new Date()),
+      ]);
+      repository.findById.mockResolvedValue(os);
+
+      await expect(
+        service.concluirServico('os-exec-1', 's-inexistente', 1),
+      ).rejects.toThrow(ServicoNotAddedError);
+      expect(repository.update).not.toHaveBeenCalled();
+    });
+
+    it('should propagate ItemServicoInvalidStatusError when item is PENDENTE', async () => {
+      const os = makeOsEmExecucao([new ItemServicoOS('s-1', 1, 100)]);
+      repository.findById.mockResolvedValue(os);
+
+      await expect(
+        service.concluirServico('os-exec-1', 's-1', 1),
+      ).rejects.toThrow(ItemServicoInvalidStatusError);
+      expect(repository.update).not.toHaveBeenCalled();
     });
   });
 });
