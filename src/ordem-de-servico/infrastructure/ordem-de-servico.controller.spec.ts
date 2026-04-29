@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { OrdemDeServicoController } from './ordem-de-servico.controller';
 import { OrdemDeServicoService } from '../application/ordem-de-servico.service';
+import { AuditLogService } from '../application/audit-log.service';
 import { OrdemDeServico } from '../domain/ordem-de-servico.entity';
 import { StatusOS } from '../domain/value-objects/status-os.vo';
 import { ClienteNotFoundError } from '../domain/errors/cliente-not-found.error';
@@ -131,7 +132,13 @@ describe('OrdemDeServicoController', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [OrdemDeServicoController],
-      providers: [{ provide: OrdemDeServicoService, useValue: mockService }],
+      providers: [
+        { provide: OrdemDeServicoService, useValue: mockService },
+        {
+          provide: AuditLogService,
+          useValue: { findByOrdemDeServicoId: jest.fn().mockResolvedValue([]) },
+        },
+      ],
     }).compile();
 
     controller = module.get<OrdemDeServicoController>(OrdemDeServicoController);

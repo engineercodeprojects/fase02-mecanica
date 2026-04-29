@@ -30,6 +30,8 @@ describe('PrismaServicoRepository (integration)', () => {
   });
 
   beforeEach(async () => {
+    // Limpa tabelas filhas antes (FK constraint dos itens de OS)
+    await prisma.itemOrdemDeServicoServico.deleteMany();
     await prisma.servico.deleteMany();
   });
 

@@ -5,8 +5,8 @@ import {
   CLIENTE_REPOSITORY,
   ClienteRepository,
 } from '../../../cliente/domain/cliente.repository';
-import { OrcamentoProntoEvent } from '../../../ordem-de-servico/domain/events/orcamento-pronto.event';
-import { OsFinalizadaEvent } from '../../../ordem-de-servico/domain/events/os-finalizada.event';
+import { OrcamentoProntoEvent } from '../../../shared/domain/events/orcamento-pronto.event';
+import { OsFinalizadaEvent } from '../../../shared/domain/events/os-finalizada.event';
 import { CanalNotificacao } from '../../domain/value-objects/canal-notificacao.vo';
 import { TipoNotificacao } from '../../domain/value-objects/tipo-notificacao.vo';
 import { NotificacaoService } from '../notificacao.service';

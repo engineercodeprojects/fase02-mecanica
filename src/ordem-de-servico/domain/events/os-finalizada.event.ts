@@ -1,9 +1,3 @@
-export class OsFinalizadaEvent {
-  static readonly EVENT_NAME = 'os.finalizada';
-
-  constructor(
-    public readonly ordemDeServicoId: string,
-    public readonly numero: string,
-    public readonly clienteId: string,
-  ) {}
-}
+// Re-export do shared kernel para nao quebrar imports existentes.
+// Codigo novo deve importar diretamente de '@/shared/domain/events/...'.
+export { OsFinalizadaEvent } from '../../../shared/domain/events/os-finalizada.event';

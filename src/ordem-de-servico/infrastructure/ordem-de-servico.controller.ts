@@ -28,6 +28,7 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { OrdemDeServicoService } from '../application/ordem-de-servico.service';
+import { AuditLogService } from '../application/audit-log.service';
 import { CreateOrdemDeServicoDto } from './dto/create-ordem-de-servico.dto';
 import { CompletarDiagnosticoDto } from './dto/completar-diagnostico.dto';
 import { QueryOrdemDeServicoDto } from './dto/query-ordem-de-servico.dto';
@@ -62,7 +63,29 @@ import { Usuario } from '../../auth/domain/usuario.entity';
 @ApiForbiddenResponse({ description: 'Role insuficiente' })
 @Controller('ordens-servico')
 export class OrdemDeServicoController {
-  constructor(private readonly service: OrdemDeServicoService) {}
+  constructor(
+    private readonly service: OrdemDeServicoService,
+    private readonly auditLogService: AuditLogService,
+  ) {}
+
+  @Get(':id/audit-log')
+  @Roles(Role.ADMIN, Role.ATENDENTE)
+  @ApiOperation({
+    summary: 'Listar audit log da OS (transicoes e acoes registradas)',
+  })
+  @ApiOkResponse({ description: 'Log paginado em ordem cronologica' })
+  async findAuditLog(@Param('id', ParseUUIDPipe) id: string) {
+    const logs = await this.auditLogService.findByOrdemDeServicoId(id);
+    return logs.map((log) => ({
+      id: log.id,
+      acao: log.acao,
+      statusAnterior: log.statusAnterior,
+      statusNovo: log.statusNovo,
+      usuarioId: log.usuarioId,
+      metadata: log.metadata,
+      createdAt: log.createdAt,
+    }));
+  }
 
   @Post()
   @Roles(Role.ADMIN, Role.ATENDENTE)

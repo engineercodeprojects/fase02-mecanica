@@ -112,6 +112,7 @@ model OrdemDeServico {
 
   itensServico  ItemOrdemDeServicoServico[]
   itensProduto   ItemOrdemDeServicoProduto[]
+  auditLogs     OrdemDeServicoAuditLog[]
 
   @@map("ordem_de_servico")
 }
@@ -164,6 +165,22 @@ enum StatusOrdemDeServico {
   FINALIZADA
   ENTREGUE
   CANCELADA
+}
+
+model OrdemDeServicoAuditLog {
+  id               String   @id @default(uuid())
+  ordemDeServicoId String   @map("ordem_de_servico_id")
+  acao             String
+  statusAnterior   String?  @map("status_anterior")
+  statusNovo       String?  @map("status_novo")
+  usuarioId        String?  @map("usuario_id")
+  metadata         Json?
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  ordemDeServico OrdemDeServico @relation(fields: [ordemDeServicoId], references: [id], onDelete: Cascade)
+
+  @@index([ordemDeServicoId, createdAt])
+  @@map("ordem_de_servico_audit_log")
 }
 
 model Notificacao {
