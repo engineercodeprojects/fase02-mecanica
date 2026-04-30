@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/api-client';
 import type { Paginated, Produto } from '@/lib/api/types';
@@ -21,6 +22,13 @@ interface FormState {
   estoqueMinimo: number;
 }
 
+interface MovimentacaoModalState {
+  produto: Produto;
+  tipo: 'ENTRADA' | 'SAIDA';
+  quantidade: number;
+  motivo: string;
+}
+
 const empty: FormState = {
   nome: '',
   descricao: '',
@@ -29,13 +37,20 @@ const empty: FormState = {
   estoqueMinimo: 0,
 };
 
+const EMPTY_PRODUTOS: Produto[] = [];
+const MOTIVO_MAX_LEN = 500;
+
+const isLowStock = (p: Produto) =>
+  p.alertaEstoqueBaixo ?? p.quantidadeEstoque <= p.estoqueMinimo;
+
+const disponivelDe = (p: Produto) =>
+  p.quantidadeDisponivel ?? p.quantidadeEstoque - p.quantidadeReservada;
+
 export function ProdutosListPage() {
   const qc = useQueryClient();
   const [form, setForm] = useState<FormState | null>(null);
-  const [estoqueModal, setEstoqueModal] = useState<{
-    produto: Produto;
-    quantidade: number;
-  } | null>(null);
+  const [movModal, setMovModal] = useState<MovimentacaoModalState | null>(null);
+  const [onlyLowStock, setOnlyLowStock] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['produtos'],
@@ -44,6 +59,12 @@ export function ProdutosListPage() {
         query: { page: 1, limit: 100 },
       }),
   });
+
+  const produtos = data?.data ?? EMPTY_PRODUTOS;
+  const filtered = useMemo(
+    () => (onlyLowStock ? produtos.filter(isLowStock) : produtos),
+    [produtos, onlyLowStock],
+  );
 
   const createMut = useMutation({
     mutationFn: (input: FormState) =>
@@ -84,16 +105,28 @@ export function ProdutosListPage() {
     onError: (e: Error) => toast(e.message, 'error'),
   });
 
-  const addStockMut = useMutation({
-    mutationFn: ({ id, quantidade }: { id: string; quantidade: number }) =>
-      apiRequest(`/produtos/${id}/estoque`, {
-        method: 'POST',
-        body: { quantidade },
-      }),
-    onSuccess: () => {
-      toast('Estoque atualizado', 'success');
+  const movMut = useMutation({
+    mutationFn: (m: MovimentacaoModalState) =>
+      apiRequest(
+        `/produtos/${m.produto.id}/${m.tipo === 'ENTRADA' ? 'entrada' : 'saida'}`,
+        {
+          method: 'POST',
+          body: {
+            quantidade: m.quantidade,
+            motivo: m.motivo || undefined,
+          },
+        },
+      ),
+    onSuccess: (_d, vars) => {
+      toast(
+        vars.tipo === 'ENTRADA'
+          ? 'Entrada registrada'
+          : 'Saida registrada',
+        'success',
+      );
       qc.invalidateQueries({ queryKey: ['produtos'] });
-      setEstoqueModal(null);
+      qc.invalidateQueries({ queryKey: ['estoque-baixo'] });
+      setMovModal(null);
     },
     onError: (e: Error) => toast(e.message, 'error'),
   });
@@ -115,6 +148,8 @@ export function ProdutosListPage() {
     else createMut.mutate(form);
   };
 
+  const totalLowStock = produtos.filter(isLowStock).length;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -122,12 +157,35 @@ export function ProdutosListPage() {
           <h1 className="text-2xl font-bold">Produtos / Estoque</h1>
           <p className="text-sm text-slate-500">
             {data?.total ?? 0} produto(s)
+            {totalLowStock > 0 && (
+              <>
+                {' '}
+                ·{' '}
+                <span className="font-medium text-amber-700">
+                  {totalLowStock} com estoque baixo
+                </span>
+              </>
+            )}
           </p>
         </div>
         <Button onClick={() => setForm({ ...empty })}>+ Novo Produto</Button>
       </div>
       <Card>
-        <CardBody>
+        <CardBody className="space-y-4">
+          <div className="flex items-center gap-4">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={onlyLowStock}
+                onChange={(e) => setOnlyLowStock(e.target.checked)}
+                className="h-4 w-4"
+              />
+              Apenas estoque baixo
+            </label>
+            <span className="text-xs text-slate-500">
+              ({filtered.length} resultado{filtered.length === 1 ? '' : 's'})
+            </span>
+          </div>
           {isLoading ? (
             <div>Carregando...</div>
           ) : (
@@ -138,13 +196,14 @@ export function ProdutosListPage() {
                   <TH className="text-right">Preco</TH>
                   <TH className="text-right">Estoque</TH>
                   <TH className="text-right">Reservado</TH>
+                  <TH className="text-right">Disponivel</TH>
                   <TH className="text-right">Min.</TH>
                   <TH className="text-right">Acoes</TH>
                 </TR>
               </THead>
               <TBody>
-                {data?.data.map((p) => {
-                  const baixo = p.quantidadeEstoque <= p.estoqueMinimo;
+                {filtered.map((p) => {
+                  const baixo = isLowStock(p);
                   return (
                     <TR key={p.id}>
                       <TD className="font-medium">
@@ -158,22 +217,56 @@ export function ProdutosListPage() {
                       <TD className="text-right">
                         {formatCurrency(Number(p.precoUnitario))}
                       </TD>
-                      <TD className="text-right">{p.quantidadeEstoque}</TD>
-                      <TD className="text-right">{p.quantidadeReservada}</TD>
-                      <TD className="text-right">{p.estoqueMinimo}</TD>
+                      <TD className="text-right font-mono">
+                        {p.quantidadeEstoque}
+                      </TD>
+                      <TD className="text-right font-mono">
+                        {p.quantidadeReservada}
+                      </TD>
+                      <TD className="text-right font-mono font-medium">
+                        {disponivelDe(p)}
+                      </TD>
+                      <TD className="text-right font-mono text-slate-500">
+                        {p.estoqueMinimo}
+                      </TD>
                       <TD className="text-right whitespace-nowrap">
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={() =>
-                            setEstoqueModal({ produto: p, quantidade: 0 })
+                            setMovModal({
+                              produto: p,
+                              tipo: 'ENTRADA',
+                              quantidade: 0,
+                              motivo: '',
+                            })
                           }
                         >
-                          + Estoque
+                          + Entrada
                         </Button>
                         <Button
                           size="sm"
                           variant="outline"
+                          className="ml-2"
+                          onClick={() =>
+                            setMovModal({
+                              produto: p,
+                              tipo: 'SAIDA',
+                              quantidade: 0,
+                              motivo: '',
+                            })
+                          }
+                        >
+                          − Saida
+                        </Button>
+                        <Link to={`/produtos/${p.id}/movimentacoes`}>
+                          <Button size="sm" variant="ghost" className="ml-2">
+                            Movs.
+                          </Button>
+                        </Link>
+                        <Button
+                          size="sm"
+                          variant="ghost"
                           className="ml-2"
                           onClick={() =>
                             setForm({
@@ -203,6 +296,15 @@ export function ProdutosListPage() {
                     </TR>
                   );
                 })}
+                {filtered.length === 0 && (
+                  <TR>
+                    <TD colSpan={7} className="py-8 text-center text-slate-500">
+                      {onlyLowStock
+                        ? 'Nenhum produto com estoque baixo'
+                        : 'Nenhum produto cadastrado'}
+                    </TD>
+                  </TR>
+                )}
               </TBody>
             </Table>
           )}
@@ -299,52 +401,103 @@ export function ProdutosListPage() {
       </Dialog>
 
       <Dialog
-        open={estoqueModal !== null}
-        onClose={() => setEstoqueModal(null)}
-        title="Adicionar ao estoque"
+        open={movModal !== null}
+        onClose={() => setMovModal(null)}
+        title={
+          movModal?.tipo === 'ENTRADA'
+            ? 'Registrar entrada de estoque'
+            : 'Registrar saida de estoque'
+        }
         size="sm"
       >
-        {estoqueModal && (
+        {movModal && (
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              addStockMut.mutate({
-                id: estoqueModal.produto.id,
-                quantidade: estoqueModal.quantidade,
-              });
+              movMut.mutate(movModal);
             }}
             className="space-y-4"
           >
-            <div className="text-sm text-slate-700">
-              <span className="font-medium">{estoqueModal.produto.nome}</span>
-              <br />
-              Estoque atual: {estoqueModal.produto.quantidadeEstoque}
+            <div className="rounded-md bg-slate-50 p-3 text-sm text-slate-700">
+              <span className="font-medium">{movModal.produto.nome}</span>
+              <div className="mt-1 grid grid-cols-3 gap-2 text-xs text-slate-500">
+                <div>
+                  Estoque:{' '}
+                  <span className="font-mono text-slate-900">
+                    {movModal.produto.quantidadeEstoque}
+                  </span>
+                </div>
+                <div>
+                  Reservado:{' '}
+                  <span className="font-mono text-slate-900">
+                    {movModal.produto.quantidadeReservada}
+                  </span>
+                </div>
+                <div>
+                  Disponivel:{' '}
+                  <span className="font-mono text-slate-900">
+                    {disponivelDe(movModal.produto)}
+                  </span>
+                </div>
+              </div>
             </div>
             <div>
-              <Label>Quantidade a adicionar *</Label>
+              <Label>Quantidade *</Label>
               <Input
                 type="number"
                 min={1}
-                value={estoqueModal.quantidade || ''}
+                value={movModal.quantidade || ''}
                 onChange={(e) =>
-                  setEstoqueModal({
-                    ...estoqueModal,
+                  setMovModal({
+                    ...movModal,
                     quantidade: Number(e.target.value),
                   })
                 }
                 required
               />
+              {movModal.tipo === 'SAIDA' &&
+                movModal.quantidade > disponivelDe(movModal.produto) && (
+                  <p className="mt-1 text-xs text-red-600">
+                    Excede o disponivel ({disponivelDe(movModal.produto)})
+                  </p>
+                )}
+            </div>
+            <div>
+              <Label>Motivo</Label>
+              <Input
+                value={movModal.motivo}
+                onChange={(e) =>
+                  setMovModal({ ...movModal, motivo: e.target.value })
+                }
+                maxLength={MOTIVO_MAX_LEN}
+                placeholder={
+                  movModal.tipo === 'ENTRADA'
+                    ? 'Compra fornecedor X, ajuste...'
+                    : 'Perda, ajuste de inventario...'
+                }
+              />
+              <p className="mt-1 text-xs text-slate-400">
+                {movModal.motivo.length}/{MOTIVO_MAX_LEN}
+              </p>
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button
                 variant="outline"
                 type="button"
-                onClick={() => setEstoqueModal(null)}
+                onClick={() => setMovModal(null)}
               >
                 Cancelar
               </Button>
-              <Button type="submit" disabled={addStockMut.isPending}>
-                Adicionar
+              <Button
+                type="submit"
+                disabled={
+                  movMut.isPending ||
+                  movModal.quantidade <= 0 ||
+                  (movModal.tipo === 'SAIDA' &&
+                    movModal.quantidade > disponivelDe(movModal.produto))
+                }
+              >
+                Confirmar
               </Button>
             </div>
           </form>

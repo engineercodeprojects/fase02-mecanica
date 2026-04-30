@@ -18,6 +18,7 @@ export interface ProdutoRepository {
   create(produto: Produto): Promise<Produto>;
   findById(id: string): Promise<Produto | null>;
   findAll(params: FindAllParams): Promise<PaginatedResult<Produto>>;
+  findLowStock(): Promise<Produto[]>;
   update(produto: Produto): Promise<Produto>;
   delete(id: string): Promise<void>;
 }

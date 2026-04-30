@@ -64,6 +64,43 @@ export class PrismaProdutoRepository implements ProdutoRepository {
     };
   }
 
+  async findLowStock(): Promise<Produto[]> {
+    // Prisma nao suporta comparar duas colunas no where, entao usamos SQL raw.
+    // Ordena pelos mais criticos primeiro (estoque mais abaixo do minimo).
+    const records = await this.prisma.$queryRaw<
+      Array<{
+        id: string;
+        nome: string;
+        descricao: string | null;
+        preco_unitario: unknown;
+        quantidade_estoque: number;
+        quantidade_reservada: number;
+        estoque_minimo: number;
+        ativo: boolean;
+      }>
+    >`
+      SELECT id, nome, descricao, preco_unitario,
+             quantidade_estoque, quantidade_reservada,
+             estoque_minimo, ativo
+      FROM produto
+      WHERE ativo = true AND quantidade_estoque <= estoque_minimo
+      ORDER BY (quantidade_estoque - estoque_minimo) ASC, nome ASC
+    `;
+
+    return records.map((r) =>
+      Produto.reconstitute({
+        id: r.id,
+        nome: r.nome,
+        descricao: r.descricao,
+        precoUnitario: Number(r.preco_unitario),
+        quantidadeEstoque: r.quantidade_estoque,
+        quantidadeReservada: r.quantidade_reservada,
+        estoqueMinimo: r.estoque_minimo,
+        ativo: r.ativo,
+      }),
+    );
+  }
+
   async update(produto: Produto): Promise<Produto> {
     const record = await this.prisma.produto.update({
       where: { id: produto.id },
