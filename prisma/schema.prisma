@@ -138,7 +138,6 @@ model OrdemDeServico {
   usuario   Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
 
   itensServico  ItemOrdemDeServicoServico[]
-  itensProduto   ItemOrdemDeServicoProduto[]
 
   @@map("ordem_de_servico")
 }
@@ -157,23 +156,24 @@ model ItemOrdemDeServicoServico {
 
   ordemDeServico OrdemDeServico @relation(fields: [ordemDeServicoId], references: [id], onDelete: Cascade)
   servico        Servico        @relation(fields: [servicoId], references: [id])
+  produtos       ItemOrdemDeServicoProduto[]
 
   @@unique([ordemDeServicoId, servicoId])
   @@map("item_ordem_de_servico_servico")
 }
 
 model ItemOrdemDeServicoProduto {
-  id               String   @id @default(uuid())
-  ordemDeServicoId String   @map("ordem_de_servico_id")
-  produtoId        String   @map("produto_id")
-  quantidade       Int
-  precoUnitario    Decimal  @map("preco_unitario")
-  createdAt        DateTime @default(now()) @map("created_at")
+  id                          String   @id @default(uuid())
+  itemOrdemDeServicoServicoId String   @map("item_ordem_de_servico_servico_id")
+  produtoId                   String   @map("produto_id")
+  quantidade                  Int
+  precoUnitario               Decimal  @map("preco_unitario")
+  createdAt                   DateTime @default(now()) @map("created_at")
 
-  ordemDeServico OrdemDeServico @relation(fields: [ordemDeServicoId], references: [id], onDelete: Cascade)
-  produto        Produto        @relation(fields: [produtoId], references: [id])
+  itemOrdemDeServicoServico ItemOrdemDeServicoServico @relation(fields: [itemOrdemDeServicoServicoId], references: [id], onDelete: Cascade)
+  produto                   Produto                   @relation(fields: [produtoId], references: [id])
 
-  @@unique([ordemDeServicoId, produtoId])
+  @@unique([itemOrdemDeServicoServicoId, produtoId])
   @@map("item_ordem_de_servico_produto")
 }
 

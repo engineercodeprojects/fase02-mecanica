@@ -449,34 +449,55 @@ describe('OrdemDeServico Entity', () => {
     });
   });
 
-  describe('adicionarProduto', () => {
-    it('should add product to OS and compute subtotal', () => {
+  describe('adicionarProdutoAoServico', () => {
+    const seedOsComServico = () => {
       const os = reconstituteEmDiagnostico();
-      const item = new ItemProdutoOS('produto-1', 3, 25);
+      os.adicionarServico(new ItemServicoOS('servico-1', 1, 100));
+      return os;
+    };
 
-      os.adicionarProduto(item);
+    it('should attach product to the matching service and compute totals', () => {
+      const os = seedOsComServico();
+      const produto = new ItemProdutoOS('produto-1', 3, 25);
 
-      expect(os.itensProduto).toHaveLength(1);
-      expect(os.itensProduto[0].subtotal()).toBe(75);
+      os.adicionarProdutoAoServico('servico-1', produto);
+
+      const servico = os.itensServico.find((s) => s.servicoId === 'servico-1')!;
+      expect(servico.produtos).toHaveLength(1);
+      expect(servico.produtos[0].subtotal()).toBe(75);
+      expect(servico.subtotalProdutos()).toBe(75);
+      expect(servico.subtotal()).toBe(175); // 100 servico + 75 produto
       expect(os.valorTotalProdutos()).toBe(75);
     });
 
-    it('should accumulate valor total across multiple products', () => {
-      const os = reconstituteEmDiagnostico();
-      os.adicionarProduto(new ItemProdutoOS('produto-1', 2, 50));
-      os.adicionarProduto(new ItemProdutoOS('produto-2', 1, 30));
+    it('should accumulate valor total across multiple products of the same service', () => {
+      const os = seedOsComServico();
+      os.adicionarProdutoAoServico('servico-1', new ItemProdutoOS('produto-1', 2, 50));
+      os.adicionarProdutoAoServico('servico-1', new ItemProdutoOS('produto-2', 1, 30));
 
-      expect(os.itensProduto).toHaveLength(2);
+      const servico = os.itensServico.find((s) => s.servicoId === 'servico-1')!;
+      expect(servico.produtos).toHaveLength(2);
       expect(os.valorTotalProdutos()).toBe(130);
     });
 
-    it('should reject duplicate produtoId', () => {
-      const os = reconstituteEmDiagnostico();
-      os.adicionarProduto(new ItemProdutoOS('produto-1', 1, 10));
+    it('should reject duplicate produtoId in the same service', () => {
+      const os = seedOsComServico();
+      os.adicionarProdutoAoServico('servico-1', new ItemProdutoOS('produto-1', 1, 10));
 
       expect(() =>
-        os.adicionarProduto(new ItemProdutoOS('produto-1', 5, 10)),
+        os.adicionarProdutoAoServico('servico-1', new ItemProdutoOS('produto-1', 5, 10)),
       ).toThrow(ProdutoAlreadyAddedError);
+    });
+
+    it('should reject when the service is not in the OS', () => {
+      const os = seedOsComServico();
+
+      expect(() =>
+        os.adicionarProdutoAoServico(
+          'servico-fantasma',
+          new ItemProdutoOS('produto-1', 1, 10),
+        ),
+      ).toThrow(ServicoNotAddedError);
     });
 
     it('should reject when OS is not EM_DIAGNOSTICO', () => {
@@ -487,7 +508,10 @@ describe('OrdemDeServico Entity', () => {
       });
 
       expect(() =>
-        os.adicionarProduto(new ItemProdutoOS('produto-1', 1, 10)),
+        os.adicionarProdutoAoServico(
+          'servico-1',
+          new ItemProdutoOS('produto-1', 1, 10),
+        ),
       ).toThrow(InvalidStatusTransitionError);
     });
 
@@ -501,25 +525,41 @@ describe('OrdemDeServico Entity', () => {
     });
   });
 
-  describe('removerProduto', () => {
-    it('should remove product and recompute total', () => {
+  describe('removerProdutoDoServico', () => {
+    const seedOsComServicoEProdutos = () => {
       const os = reconstituteEmDiagnostico();
-      os.adicionarProduto(new ItemProdutoOS('produto-1', 2, 50));
-      os.adicionarProduto(new ItemProdutoOS('produto-2', 1, 30));
+      os.adicionarServico(new ItemServicoOS('servico-1', 1, 100));
+      os.adicionarProdutoAoServico('servico-1', new ItemProdutoOS('produto-1', 2, 50));
+      os.adicionarProdutoAoServico('servico-1', new ItemProdutoOS('produto-2', 1, 30));
+      return os;
+    };
 
-      os.removerProduto('produto-1');
+    it('should remove product from service and recompute total', () => {
+      const os = seedOsComServicoEProdutos();
 
-      expect(os.itensProduto).toHaveLength(1);
-      expect(os.itensProduto[0].produtoId).toBe('produto-2');
+      os.removerProdutoDoServico('servico-1', 'produto-1');
+
+      const servico = os.itensServico.find((s) => s.servicoId === 'servico-1')!;
+      expect(servico.produtos).toHaveLength(1);
+      expect(servico.produtos[0].produtoId).toBe('produto-2');
       expect(os.valorTotalProdutos()).toBe(30);
     });
 
-    it('should throw when product is not in OS', () => {
+    it('should throw when product is not attached to the service', () => {
+      const os = reconstituteEmDiagnostico();
+      os.adicionarServico(new ItemServicoOS('servico-1', 1, 100));
+
+      expect(() =>
+        os.removerProdutoDoServico('servico-1', 'inexistente'),
+      ).toThrow(ProdutoNotAddedError);
+    });
+
+    it('should throw when the service is not in the OS', () => {
       const os = reconstituteEmDiagnostico();
 
-      expect(() => os.removerProduto('inexistente')).toThrow(
-        ProdutoNotAddedError,
-      );
+      expect(() =>
+        os.removerProdutoDoServico('servico-fantasma', 'produto-1'),
+      ).toThrow(ServicoNotAddedError);
     });
 
     it('should reject when OS is not EM_DIAGNOSTICO', () => {
@@ -536,7 +576,7 @@ describe('OrdemDeServico Entity', () => {
         updatedAt: new Date(),
       });
 
-      expect(() => os.removerProduto('produto-1')).toThrow(
+      expect(() => os.removerProdutoDoServico('servico-1', 'produto-1')).toThrow(
         InvalidStatusTransitionError,
       );
     });

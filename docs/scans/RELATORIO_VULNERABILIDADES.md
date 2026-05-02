@@ -41,6 +41,26 @@ A esteira completa que produziu estes resultados está descrita em [docs/seguran
 | Filesystem (deps + secrets + misconfig Docker) | Trivy fs                  | `0.58.2`  | 0 HIGH+ em 6 alvos                                   | [`raw/trivy-fs.json`](raw/trivy-fs.json)                       |
 | Quality + SAST agregado                        | SonarQube Community       | 10.6      | Executado em CI (artifact `sonar-report` no Actions) | (não bloqueante)                                               |
 
+### 3.1 Capturas das execuções
+
+#### Semgrep — OWASP Top 10 (gate verde)
+
+![Semgrep OWASP Top 10 — 0 findings em 391 arquivos](img/semgrep-owasp-top10.png)
+
+> Saída do comando `semgrep --config=p/owasp-top-ten /src` no commit `4e5b926`. Resultado: **0 findings** (gate aprovado).
+
+#### SonarQube — Overview do projeto
+
+![SonarQube Overview — Bugs / Vulnerabilities / Security Hotspots / Coverage](img/sonarqube-overview.png)
+
+> Dashboard do projeto `tech-challenge` em `http://localhost:9000` após scan local. Métricas-chave: Bugs, Vulnerabilities, Security Hotspots, Coverage e Duplications.
+
+#### SonarQube — Security Hotspots / OWASP Top 10
+
+![SonarQube Security Hotspots — categorias OWASP](img/sonarqube-security-hotspots.png)
+
+> Aba **Security Hotspots** com agrupamento por categoria OWASP Top 10.
+
 ---
 
 ## 4. OWASP Top 10 — Mapeamento dos findings

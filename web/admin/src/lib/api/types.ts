@@ -68,10 +68,23 @@ export interface MovimentacaoEstoque {
   createdAt: string;
 }
 
+export interface ItemProdutoOS {
+  produtoId: string;
+  quantidade: number;
+  precoUnitario: number;
+  subtotal?: number;
+}
+
 export interface ItemServicoOS {
   servicoId: string;
   quantidade: number;
   precoUnitario: number;
+  subtotal?: number;
+  statusExecucao?: 'PENDENTE' | 'EM_EXECUCAO' | 'CONCLUIDO';
+  inicioExecucao?: string | null;
+  fimExecucao?: string | null;
+  horasTrabalhadas?: number | null;
+  produtos?: ItemProdutoOS[];
 }
 
 export interface OrdemDeServico {
@@ -85,6 +98,7 @@ export interface OrdemDeServico {
   status: StatusOS;
   itensServico: ItemServicoOS[];
   valorTotalServicos?: number;
+  valorTotalProdutos?: number;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -102,4 +116,19 @@ export interface Paginated<T> {
   total: number;
   page: number;
   limit: number;
+}
+
+export interface TempoMedioPorServico {
+  servicoId: string;
+  servicoNome: string;
+  totalConcluidos: number;
+  tempoMedioMinutos: number;
+  tempoMedioHoras: number;
+}
+
+export interface TempoMedioExecucao {
+  totalServicosConcluidos: number;
+  tempoMedioGeralMinutos: number;
+  tempoMedioGeralHoras: number;
+  porServico: TempoMedioPorServico[];
 }

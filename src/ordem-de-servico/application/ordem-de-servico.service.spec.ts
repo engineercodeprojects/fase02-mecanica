@@ -47,6 +47,7 @@ describe('OrdemDeServicoService', () => {
       update: jest.fn(),
       delete: jest.fn(),
       existsByNumero: jest.fn(),
+      getTempoMedioExecucao: jest.fn(),
     };
 
     const mockClienteRepository = {
@@ -348,6 +349,87 @@ describe('OrdemDeServicoService', () => {
         limit: 10,
         clienteId: 'cliente-123',
       });
+    });
+
+    it('should filter by status', async () => {
+      repository.findAll.mockResolvedValue({
+        data: [],
+        total: 0,
+        page: 1,
+        limit: 10,
+      });
+
+      await service.findAll({
+        page: 1,
+        limit: 10,
+        status: StatusOS.RECEBIDA,
+      });
+
+      expect(repository.findAll).toHaveBeenCalledWith({
+        page: 1,
+        limit: 10,
+        status: StatusOS.RECEBIDA,
+      });
+    });
+  });
+
+  describe('getTempoMedioExecucao', () => {
+    it('should delegate to repository and return aggregate', async () => {
+      const expected = {
+        totalServicosConcluidos: 3,
+        tempoMedioGeralMinutos: 45,
+        tempoMedioGeralHoras: 0.75,
+        porServico: [
+          {
+            servicoId: 'srv-1',
+            servicoNome: 'Troca de oleo',
+            totalConcluidos: 3,
+            tempoMedioMinutos: 45,
+            tempoMedioHoras: 0.75,
+          },
+        ],
+      };
+      repository.getTempoMedioExecucao.mockResolvedValue(expected);
+
+      const result = await service.getTempoMedioExecucao({
+        servicoId: 'srv-1',
+      });
+
+      expect(result).toEqual(expected);
+      expect(repository.getTempoMedioExecucao).toHaveBeenCalledWith({
+        servicoId: 'srv-1',
+      });
+    });
+
+    it('should pass through date range filters', async () => {
+      const dataInicio = new Date('2026-01-01');
+      const dataFim = new Date('2026-12-31');
+      repository.getTempoMedioExecucao.mockResolvedValue({
+        totalServicosConcluidos: 0,
+        tempoMedioGeralMinutos: 0,
+        tempoMedioGeralHoras: 0,
+        porServico: [],
+      });
+
+      await service.getTempoMedioExecucao({ dataInicio, dataFim });
+
+      expect(repository.getTempoMedioExecucao).toHaveBeenCalledWith({
+        dataInicio,
+        dataFim,
+      });
+    });
+
+    it('should describe filter shape with no filters', async () => {
+      repository.getTempoMedioExecucao.mockResolvedValue({
+        totalServicosConcluidos: 0,
+        tempoMedioGeralMinutos: 0,
+        tempoMedioGeralHoras: 0,
+        porServico: [],
+      });
+
+      await service.getTempoMedioExecucao({});
+
+      expect(repository.getTempoMedioExecucao).toHaveBeenCalledWith({});
     });
 
     it('should filter by status', async () => {
@@ -732,10 +814,11 @@ describe('OrdemDeServicoService', () => {
         quantidade: 2,
         precoUnitario: 150,
         subtotal: 300,
+        produtos: [],
       });
       expect(view.valorTotalServicos).toBe(380);
       expect(view.valorTotal).toBe(380);
-      expect(view.produtos).toEqual([]);
+      expect(view.servicos.every((s) => s.produtos.length === 0)).toBe(true);
     });
 
     it('should use fallback name when servico removed from catalog', async () => {
@@ -822,67 +905,8 @@ describe('OrdemDeServicoService', () => {
     });
   });
 
-  describe('adicionarProduto', () => {
-    const makeOsEmDiagnostico = () =>
-      OrdemDeServico.reconstitute({
-        id: 'os-123',
-        numero: 'OS-2026-00001',
-        clienteId: 'cliente-123',
-        veiculoId: 'veiculo-456',
-        usuarioId: 'usuario-789',
-        descricaoInicial: 'Cliente relata problemas no freio',
-        diagnostico: null,
-        status: StatusOS.EM_DIAGNOSTICO,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-
-    it('should add product using snapshot of current precoUnitario', async () => {
-      const os = makeOsEmDiagnostico();
-      const produto: any = { id: 'produto-1', precoUnitario: { value: 45.5 } };
-
-      repository.findById.mockResolvedValue(os);
-      produtoRepository.findById.mockResolvedValue(produto);
-      repository.update.mockResolvedValue(os);
-
-      await service.adicionarProduto('os-123', 'produto-1', 3);
-
-      expect(produtoRepository.findById).toHaveBeenCalledWith('produto-1');
-      expect(os.itensProduto).toHaveLength(1);
-      expect(os.itensProduto[0].precoUnitario).toBe(45.5);
-      expect(os.valorTotalProdutos()).toBe(136.5);
-      expect(repository.update).toHaveBeenCalledWith(os);
-    });
-
-    it('should throw when produto is not in catalog', async () => {
-      const os = makeOsEmDiagnostico();
-
-      repository.findById.mockResolvedValue(os);
-      produtoRepository.findById.mockResolvedValue(null);
-
-      await expect(
-        service.adicionarProduto('os-123', 'produto-x', 1),
-      ).rejects.toThrow(ProdutoNotFoundInCatalogError);
-      expect(repository.update).not.toHaveBeenCalled();
-    });
-
-    it('should propagate ProdutoAlreadyAddedError from aggregate', async () => {
-      const os = makeOsEmDiagnostico();
-      const produto: any = { id: 'produto-1', precoUnitario: { value: 10 } };
-
-      repository.findById.mockResolvedValue(os);
-      produtoRepository.findById.mockResolvedValue(produto);
-      repository.update.mockResolvedValue(os);
-
-      await service.adicionarProduto('os-123', 'produto-1', 1);
-      await expect(
-        service.adicionarProduto('os-123', 'produto-1', 1),
-      ).rejects.toThrow(ProdutoAlreadyAddedError);
-    });
-  });
-
-  describe('removerProduto', () => {
-    it('should remove product and persist', async () => {
+  describe('adicionarProdutoAoServico', () => {
+    const makeOsEmDiagnosticoComServico = () => {
       const os = OrdemDeServico.reconstitute({
         id: 'os-123',
         numero: 'OS-2026-00001',
@@ -895,22 +919,87 @@ describe('OrdemDeServicoService', () => {
         createdAt: new Date(),
         updatedAt: new Date(),
       });
+      os.adicionarServico(new ItemServicoOS('servico-1', 1, 100));
+      return os;
+    };
+
+    it('should add product to service using snapshot of current precoUnitario', async () => {
+      const os = makeOsEmDiagnosticoComServico();
+      const produto: any = { id: 'produto-1', precoUnitario: { value: 45.5 } };
+
+      repository.findById.mockResolvedValue(os);
+      produtoRepository.findById.mockResolvedValue(produto);
+      repository.update.mockResolvedValue(os);
+
+      await service.adicionarProdutoAoServico('os-123', 'servico-1', 'produto-1', 3);
+
+      expect(produtoRepository.findById).toHaveBeenCalledWith('produto-1');
+      const servico = os.itensServico.find((s) => s.servicoId === 'servico-1')!;
+      expect(servico.produtos).toHaveLength(1);
+      expect(servico.produtos[0].precoUnitario).toBe(45.5);
+      expect(os.valorTotalProdutos()).toBe(136.5);
+      expect(repository.update).toHaveBeenCalledWith(os);
+    });
+
+    it('should throw when produto is not in catalog', async () => {
+      const os = makeOsEmDiagnosticoComServico();
+
+      repository.findById.mockResolvedValue(os);
+      produtoRepository.findById.mockResolvedValue(null);
+
+      await expect(
+        service.adicionarProdutoAoServico('os-123', 'servico-1', 'produto-x', 1),
+      ).rejects.toThrow(ProdutoNotFoundInCatalogError);
+      expect(repository.update).not.toHaveBeenCalled();
+    });
+
+    it('should propagate ProdutoAlreadyAddedError from aggregate', async () => {
+      const os = makeOsEmDiagnosticoComServico();
       const produto: any = { id: 'produto-1', precoUnitario: { value: 10 } };
 
       repository.findById.mockResolvedValue(os);
       produtoRepository.findById.mockResolvedValue(produto);
       repository.update.mockResolvedValue(os);
-      await service.adicionarProduto('os-123', 'produto-1', 1);
 
-      await service.removerProduto('os-123', 'produto-1');
+      await service.adicionarProdutoAoServico('os-123', 'servico-1', 'produto-1', 1);
+      await expect(
+        service.adicionarProdutoAoServico('os-123', 'servico-1', 'produto-1', 1),
+      ).rejects.toThrow(ProdutoAlreadyAddedError);
+    });
+  });
 
-      expect(os.itensProduto).toHaveLength(0);
+  describe('removerProdutoDoServico', () => {
+    it('should remove product from service and persist', async () => {
+      const os = OrdemDeServico.reconstitute({
+        id: 'os-123',
+        numero: 'OS-2026-00001',
+        clienteId: 'cliente-123',
+        veiculoId: 'veiculo-456',
+        usuarioId: 'usuario-789',
+        descricaoInicial: 'Cliente relata problemas no freio',
+        diagnostico: null,
+        status: StatusOS.EM_DIAGNOSTICO,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      os.adicionarServico(new ItemServicoOS('servico-1', 1, 100));
+      const produto: any = { id: 'produto-1', precoUnitario: { value: 10 } };
+
+      repository.findById.mockResolvedValue(os);
+      produtoRepository.findById.mockResolvedValue(produto);
+      repository.update.mockResolvedValue(os);
+      await service.adicionarProdutoAoServico('os-123', 'servico-1', 'produto-1', 1);
+
+      await service.removerProdutoDoServico('os-123', 'servico-1', 'produto-1');
+
+      const servico = os.itensServico.find((s) => s.servicoId === 'servico-1')!;
+      expect(servico.produtos).toHaveLength(0);
       expect(repository.update).toHaveBeenCalledTimes(2);
     });
   });
 
-  describe('findStatusByNumero with produtos', () => {
-    it('should return enriched status view with produto names and totals', async () => {
+  describe('findStatusByNumero with produtos aninhados', () => {
+    it('should expose produtos nested under each servico with names and totals', async () => {
       const os = OrdemDeServico.reconstitute({
         id: 'os-123',
         numero: 'OS-2026-1234567890-0001',
@@ -923,11 +1012,19 @@ describe('OrdemDeServicoService', () => {
         createdAt: new Date('2026-04-20T10:00:00Z'),
         updatedAt: new Date('2026-04-20T12:00:00Z'),
         itensServico: [
-          new ItemServicoOS('servico-1', 1, 100),
-        ],
-        itensProduto: [
-          new ItemProdutoOS('produto-1', 2, 50),
-          new ItemProdutoOS('produto-2', 1, 30),
+          new ItemServicoOS(
+            'servico-1',
+            1,
+            100,
+            'PENDENTE',
+            null,
+            null,
+            null,
+            [
+              new ItemProdutoOS('produto-1', 2, 50),
+              new ItemProdutoOS('produto-2', 1, 30),
+            ],
+          ),
         ],
       });
 
@@ -944,8 +1041,9 @@ describe('OrdemDeServicoService', () => {
 
       const view = await service.findStatusByNumero('OS-2026-1234567890-0001');
 
-      expect(view.produtos).toHaveLength(2);
-      expect(view.produtos[0]).toEqual({
+      const servico = view.servicos[0];
+      expect(servico.produtos).toHaveLength(2);
+      expect(servico.produtos[0]).toEqual({
         produtoId: 'produto-1',
         nome: 'Filtro de oleo',
         quantidade: 2,
@@ -969,8 +1067,17 @@ describe('OrdemDeServicoService', () => {
         status: StatusOS.EM_EXECUCAO,
         createdAt: new Date('2026-04-20T10:00:00Z'),
         updatedAt: new Date('2026-04-20T12:00:00Z'),
-        itensProduto: [
-          new ItemProdutoOS('produto-1', 1, 50),
+        itensServico: [
+          new ItemServicoOS(
+            'servico-1',
+            1,
+            100,
+            'PENDENTE',
+            null,
+            null,
+            null,
+            [new ItemProdutoOS('produto-1', 1, 50)],
+          ),
         ],
       });
 
@@ -979,7 +1086,7 @@ describe('OrdemDeServicoService', () => {
 
       const view = await service.findStatusByNumero('OS-2026-1234567890-0001');
 
-      expect(view.produtos[0].nome).toBe('Produto removido do catalogo');
+      expect(view.servicos[0].produtos[0].nome).toBe('Produto removido do catalogo');
     });
   });
 

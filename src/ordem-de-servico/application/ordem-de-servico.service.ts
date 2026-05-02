@@ -9,6 +9,8 @@ import {
   ORDEM_DE_SERVICO_REPOSITORY,
   FindAllParams,
   PaginatedResult,
+  TempoMedioFilters,
+  TempoMedioExecucaoResult,
 } from '../domain/ordem-de-servico.repository';
 import { ClienteNotFoundError } from '../domain/errors/cliente-not-found.error';
 import { VeiculoNotFoundError } from '../domain/errors/veiculo-not-found.error';
@@ -77,6 +79,12 @@ export class OrdemDeServicoService {
     return this.repository.findAll(params);
   }
 
+  async getTempoMedioExecucao(
+    filters: TempoMedioFilters,
+  ): Promise<TempoMedioExecucaoResult> {
+    return this.repository.getTempoMedioExecucao(filters);
+  }
+
   async findById(id: string): Promise<OrdemDeServico> {
     const ordemDeServico = await this.repository.findById(id);
     if (!ordemDeServico) {
@@ -97,7 +105,9 @@ export class OrdemDeServicoService {
     ]);
 
     const servicoIds = os.itensServico.map((i) => i.servicoId);
-    const produtoIds = os.itensProduto.map((i) => i.produtoId);
+    const produtoIds = os.itensServico.flatMap((i) =>
+      i.produtos.map((p) => p.produtoId),
+    );
     const [servicoNomeById, produtoNomeById] = await Promise.all([
       this.loadServicoNomes(servicoIds),
       this.loadProdutoNomes(produtoIds),
@@ -105,18 +115,19 @@ export class OrdemDeServicoService {
 
     const servicos = os.itensServico.map((i) => ({
       servicoId: i.servicoId,
-      descricaoServico: servicoNomeById.get(i.servicoId) ?? 'Servico removido do catalogo',
+      descricaoServico:
+        servicoNomeById.get(i.servicoId) ?? 'Servico removido do catalogo',
       quantidade: i.quantidade,
       precoUnitario: i.precoUnitario,
-      valorTotalDesseServico: i.subtotal(),
-    }));
-
-    const produtos = os.itensProduto.map((i) => ({
-      produtoId: i.produtoId,
-      descricaoProduto: produtoNomeById.get(i.produtoId) ?? 'Produto removido do catalogo',
-      quantidade: i.quantidade,
-      precoUnitario: i.precoUnitario,
-      valorTotalDesseProduto: i.subtotal(),
+      valorTotalDesseServico: i.subtotalServico(),
+      produtos: i.produtos.map((p) => ({
+        produtoId: p.produtoId,
+        descricaoProduto:
+          produtoNomeById.get(p.produtoId) ?? 'Produto removido do catalogo',
+        quantidade: p.quantidade,
+        precoUnitario: p.precoUnitario,
+        valorTotalDesseProduto: p.subtotal(),
+      })),
     }));
 
     const valorTotalServicos = os.valorTotalServicos();
@@ -146,7 +157,6 @@ export class OrdemDeServicoService {
       corpo: {
         diagnostico: os.diagnostico,
         servicos,
-        produtos,
       },
       rodape: {
         valorTotalServicos,
@@ -298,8 +308,9 @@ export class OrdemDeServicoService {
     return this.repository.update(ordemDeServico);
   }
 
-  async adicionarProduto(
+  async adicionarProdutoAoServico(
     id: string,
+    servicoId: string,
     produtoId: string,
     quantidade: number,
   ): Promise<OrdemDeServico> {
@@ -313,13 +324,17 @@ export class OrdemDeServicoService {
       quantidade,
       produto.precoUnitario.value,
     );
-    ordemDeServico.adicionarProduto(item);
+    ordemDeServico.adicionarProdutoAoServico(servicoId, item);
     return this.repository.update(ordemDeServico);
   }
 
-  async removerProduto(id: string, produtoId: string): Promise<OrdemDeServico> {
+  async removerProdutoDoServico(
+    id: string,
+    servicoId: string,
+    produtoId: string,
+  ): Promise<OrdemDeServico> {
     const ordemDeServico = await this.findById(id);
-    ordemDeServico.removerProduto(produtoId);
+    ordemDeServico.removerProdutoDoServico(servicoId, produtoId);
     return this.repository.update(ordemDeServico);
   }
 
@@ -330,25 +345,28 @@ export class OrdemDeServicoService {
     }
 
     const servicoIds = ordemDeServico.itensServico.map((i) => i.servicoId);
-    const servicoNomeById = await this.loadServicoNomes(servicoIds);
+    const produtoIds = ordemDeServico.itensServico.flatMap((i) =>
+      i.produtos.map((p) => p.produtoId),
+    );
+    const [servicoNomeById, produtoNomeById] = await Promise.all([
+      this.loadServicoNomes(servicoIds),
+      this.loadProdutoNomes(produtoIds),
+    ]);
 
     const servicos = ordemDeServico.itensServico.map((i) => ({
       servicoId: i.servicoId,
       nome: servicoNomeById.get(i.servicoId) ?? 'Servico removido do catalogo',
       quantidade: i.quantidade,
       precoUnitario: i.precoUnitario,
-      subtotal: i.subtotal(),
-    }));
-
-    const produtoIds = ordemDeServico.itensProduto.map((i) => i.produtoId);
-    const produtoNomeById = await this.loadProdutoNomes(produtoIds);
-
-    const produtos = ordemDeServico.itensProduto.map((i) => ({
-      produtoId: i.produtoId,
-      nome: produtoNomeById.get(i.produtoId) ?? 'Produto removido do catalogo',
-      quantidade: i.quantidade,
-      precoUnitario: i.precoUnitario,
-      subtotal: i.subtotal(),
+      subtotal: i.subtotalServico(),
+      produtos: i.produtos.map((p) => ({
+        produtoId: p.produtoId,
+        nome:
+          produtoNomeById.get(p.produtoId) ?? 'Produto removido do catalogo',
+        quantidade: p.quantidade,
+        precoUnitario: p.precoUnitario,
+        subtotal: p.subtotal(),
+      })),
     }));
 
     const valorTotalServicos = ordemDeServico.valorTotalServicos();
@@ -361,7 +379,6 @@ export class OrdemDeServicoService {
       descricaoInicial: ordemDeServico.descricaoInicial,
       diagnostico: ordemDeServico.diagnostico,
       servicos,
-      produtos,
       valorTotalServicos,
       valorTotalProdutos,
       valorTotal: valorTotalServicos + valorTotalProdutos,
@@ -426,20 +443,21 @@ export class OrdemDeServicoService {
   }
 }
 
-export interface OsStatusServico {
-  servicoId: string;
-  nome: string;
-  quantidade: number;
-  precoUnitario: number;
-  subtotal: number;
-}
-
 export interface OsStatusProduto {
   produtoId: string;
   nome: string;
   quantidade: number;
   precoUnitario: number;
   subtotal: number;
+}
+
+export interface OsStatusServico {
+  servicoId: string;
+  nome: string;
+  quantidade: number;
+  precoUnitario: number;
+  subtotal: number;
+  produtos: OsStatusProduto[];
 }
 
 export interface OsStatusView {
@@ -449,7 +467,6 @@ export interface OsStatusView {
   descricaoInicial: string;
   diagnostico: string | null;
   servicos: OsStatusServico[];
-  produtos: OsStatusProduto[];
   valorTotalServicos: number;
   valorTotalProdutos: number;
   valorTotal: number;
@@ -481,20 +498,21 @@ export interface OsDetalhesVeiculoView {
   ano: number;
 }
 
-export interface OsDetalhesServicoItem {
-  servicoId: string;
-  descricaoServico: string;
-  quantidade: number;
-  precoUnitario: number;
-  valorTotalDesseServico: number;
-}
-
 export interface OsDetalhesProdutoItem {
   produtoId: string;
   descricaoProduto: string;
   quantidade: number;
   precoUnitario: number;
   valorTotalDesseProduto: number;
+}
+
+export interface OsDetalhesServicoItem {
+  servicoId: string;
+  descricaoServico: string;
+  quantidade: number;
+  precoUnitario: number;
+  valorTotalDesseServico: number;
+  produtos: OsDetalhesProdutoItem[];
 }
 
 export interface OsDetalhesView {
@@ -509,7 +527,6 @@ export interface OsDetalhesView {
   corpo: {
     diagnostico: string | null;
     servicos: OsDetalhesServicoItem[];
-    produtos: OsDetalhesProdutoItem[];
   };
   rodape: {
     valorTotalServicos: number;

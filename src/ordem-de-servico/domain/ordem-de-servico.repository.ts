@@ -17,6 +17,27 @@ export interface PaginatedResult<T> {
   limit: number;
 }
 
+export interface TempoMedioFilters {
+  servicoId?: string;
+  dataInicio?: Date;
+  dataFim?: Date;
+}
+
+export interface TempoMedioPorServico {
+  servicoId: string;
+  servicoNome: string;
+  totalConcluidos: number;
+  tempoMedioMinutos: number;
+  tempoMedioHoras: number;
+}
+
+export interface TempoMedioExecucaoResult {
+  totalServicosConcluidos: number;
+  tempoMedioGeralMinutos: number;
+  tempoMedioGeralHoras: number;
+  porServico: TempoMedioPorServico[];
+}
+
 export interface OrdemDeServicoRepository {
   create(os: OrdemDeServico): Promise<OrdemDeServico>;
   findById(id: string): Promise<OrdemDeServico | null>;
@@ -25,4 +46,7 @@ export interface OrdemDeServicoRepository {
   update(os: OrdemDeServico): Promise<OrdemDeServico>;
   delete(id: string): Promise<void>;
   existsByNumero(numero: string): Promise<boolean>;
+  getTempoMedioExecucao(
+    filters: TempoMedioFilters,
+  ): Promise<TempoMedioExecucaoResult>;
 }

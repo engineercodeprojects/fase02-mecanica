@@ -1,9 +1,12 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   OrdemDeServicoRepository,
   FindAllParams,
   PaginatedResult,
+  TempoMedioFilters,
+  TempoMedioExecucaoResult,
 } from '../domain/ordem-de-servico.repository';
 import { OrdemDeServico } from '../domain/ordem-de-servico.entity';
 import { StatusOS } from '../domain/value-objects/status-os.vo';
@@ -13,7 +16,9 @@ import {
 } from '../domain/value-objects/item-servico-os.vo';
 import { ItemProdutoOS } from '../domain/value-objects/item-produto-os.vo';
 
-const INCLUDE_ITENS = { itensServico: true, itensProduto: true } as const;
+const INCLUDE_ITENS = {
+  itensServico: { include: { produtos: true } },
+} as const;
 
 @Injectable()
 export class PrismaOrdemDeServicoRepository
@@ -93,12 +98,13 @@ export class PrismaOrdemDeServicoRepository
           usuarioId: os.usuarioId,
         },
       });
+      // Cascade do FK em produtos descarta os filhos junto.
       await tx.itemOrdemDeServicoServico.deleteMany({
         where: { ordemDeServicoId: os.id },
       });
-      if (os.itensServico.length > 0) {
-        await tx.itemOrdemDeServicoServico.createMany({
-          data: os.itensServico.map((item) => ({
+      for (const item of os.itensServico) {
+        await tx.itemOrdemDeServicoServico.create({
+          data: {
             ordemDeServicoId: os.id as string,
             servicoId: item.servicoId,
             quantidade: item.quantidade,
@@ -107,20 +113,14 @@ export class PrismaOrdemDeServicoRepository
             inicioExecucao: item.inicioExecucao,
             fimExecucao: item.fimExecucao,
             horasTrabalhadas: item.horasTrabalhadas,
-          })),
-        });
-      }
-      await tx.itemOrdemDeServicoProduto.deleteMany({
-        where: { ordemDeServicoId: os.id },
-      });
-      if (os.itensProduto.length > 0) {
-        await tx.itemOrdemDeServicoProduto.createMany({
-          data: os.itensProduto.map((item) => ({
-            ordemDeServicoId: os.id as string,
-            produtoId: item.produtoId,
-            quantidade: item.quantidade,
-            precoUnitario: item.precoUnitario,
-          })),
+            produtos: {
+              create: item.produtos.map((p) => ({
+                produtoId: p.produtoId,
+                quantidade: p.quantidade,
+                precoUnitario: p.precoUnitario,
+              })),
+            },
+          },
         });
       }
       return tx.ordemDeServico.findUnique({
@@ -144,10 +144,97 @@ export class PrismaOrdemDeServicoRepository
     return count > 0;
   }
 
+  async getTempoMedioExecucao(
+    filters: TempoMedioFilters,
+  ): Promise<TempoMedioExecucaoResult> {
+    // A metrica usa horas_trabalhadas (fonte de verdade declarada pelo mecanico
+    // ao concluir o servico), nao o tempo decorrido entre inicio_execucao e
+    // fim_execucao. O campo do dialog vem pre-preenchido com o tempo decorrido
+    // como sugestao, mas o mecanico pode ajustar.
+    const conditions: Prisma.Sql[] = [
+      Prisma.sql`i.status_execucao = 'CONCLUIDO'`,
+      Prisma.sql`i.horas_trabalhadas IS NOT NULL`,
+      Prisma.sql`i.fim_execucao IS NOT NULL`,
+    ];
+    if (filters.servicoId) {
+      // i.servico_id eh TEXT (nao UUID), entao nao precisa cast
+      conditions.push(Prisma.sql`i.servico_id = ${filters.servicoId}`);
+    }
+    if (filters.dataInicio) {
+      conditions.push(Prisma.sql`i.fim_execucao >= ${filters.dataInicio}`);
+    }
+    if (filters.dataFim) {
+      conditions.push(Prisma.sql`i.fim_execucao <= ${filters.dataFim}`);
+    }
+    const whereSql = Prisma.sql`WHERE ${Prisma.join(conditions, ' AND ')}`;
+
+    const rows = await this.prisma.$queryRaw<
+      {
+        servicoId: string;
+        servicoNome: string;
+        totalConcluidos: bigint;
+        tempoMedioHorasDeclaradas: number | null;
+      }[]
+    >(Prisma.sql`
+      SELECT
+        s.id   AS "servicoId",
+        s.nome AS "servicoNome",
+        COUNT(*)::bigint AS "totalConcluidos",
+        AVG(i.horas_trabalhadas)::float AS "tempoMedioHorasDeclaradas"
+      FROM item_ordem_de_servico_servico i
+      JOIN servico s ON s.id = i.servico_id
+      ${whereSql}
+      GROUP BY s.id, s.nome
+      ORDER BY s.nome ASC
+    `);
+
+    const porServico = rows.map((r) => {
+      const horas = r.tempoMedioHorasDeclaradas ?? 0;
+      const minutos = horas * 60;
+      return {
+        servicoId: r.servicoId,
+        servicoNome: r.servicoNome,
+        totalConcluidos: Number(r.totalConcluidos),
+        tempoMedioMinutos: Number(minutos.toFixed(2)),
+        tempoMedioHoras: Number(horas.toFixed(2)),
+      };
+    });
+
+    const totalServicosConcluidos = porServico.reduce(
+      (sum, s) => sum + s.totalConcluidos,
+      0,
+    );
+    const somaPonderada = porServico.reduce(
+      (sum, s) => sum + s.tempoMedioMinutos * s.totalConcluidos,
+      0,
+    );
+    const tempoMedioGeralMinutos =
+      totalServicosConcluidos > 0
+        ? Number((somaPonderada / totalServicosConcluidos).toFixed(2))
+        : 0;
+
+    return {
+      totalServicosConcluidos,
+      tempoMedioGeralMinutos,
+      tempoMedioGeralHoras: Number(
+        (tempoMedioGeralMinutos / 60).toFixed(2),
+      ),
+      porServico,
+    };
+  }
+
   private toDomain(data: any): OrdemDeServico {
     const itensServico: ItemServicoOS[] = (data.itensServico ?? []).map(
-      (i: any) =>
-        new ItemServicoOS(
+      (i: any) => {
+        const produtos: ItemProdutoOS[] = (i.produtos ?? []).map(
+          (p: any) =>
+            new ItemProdutoOS(
+              p.produtoId,
+              p.quantidade,
+              Number(p.precoUnitario),
+            ),
+        );
+        return new ItemServicoOS(
           i.servicoId,
           i.quantidade,
           Number(i.precoUnitario),
@@ -155,11 +242,9 @@ export class PrismaOrdemDeServicoRepository
           i.inicioExecucao ?? null,
           i.fimExecucao ?? null,
           i.horasTrabalhadas ?? null,
-        ),
-    );
-    const itensProduto: ItemProdutoOS[] = (data.itensProduto ?? []).map(
-      (i: any) =>
-        new ItemProdutoOS(i.produtoId, i.quantidade, Number(i.precoUnitario)),
+          produtos,
+        );
+      },
     );
     return OrdemDeServico.reconstitute({
       id: data.id,
@@ -173,7 +258,6 @@ export class PrismaOrdemDeServicoRepository
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
       itensServico,
-      itensProduto,
     });
   }
 }

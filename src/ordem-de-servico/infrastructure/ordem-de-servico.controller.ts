@@ -35,6 +35,7 @@ import { AtribuirMecanicoDto } from './dto/atribuir-mecanico.dto';
 import { AdicionarServicoDto } from './dto/adicionar-servico.dto';
 import { AdicionarProdutoDto } from './dto/adicionar-produto.dto';
 import { ConcluirServicoDto } from './dto/concluir-servico.dto';
+import { QueryTempoMedioDto } from './dto/query-tempo-medio.dto';
 import { ClienteNotFoundError } from '../domain/errors/cliente-not-found.error';
 import { VeiculoNotFoundError } from '../domain/errors/veiculo-not-found.error';
 import { VeiculoClienteMismatchError } from '../domain/errors/veiculo-cliente-mismatch.error';
@@ -138,12 +139,41 @@ export class OrdemDeServicoController {
     }
   }
 
+  @Get('metricas/tempo-medio')
+  @Roles(Role.ADMIN, Role.ATENDENTE)
+  @ApiOperation({
+    summary:
+      'Tempo medio de execucao dos servicos (geral e por servico do catalogo) — US-17',
+  })
+  @ApiOkResponse({
+    description:
+      'Tempo medio em minutos/horas, total de execucoes concluidas e quebra por servico',
+  })
+  async tempoMedioExecucao(@Query() query: QueryTempoMedioDto) {
+    return this.service.getTempoMedioExecucao({
+      servicoId: query.servicoId,
+      dataInicio: query.dataInicio,
+      dataFim: query.dataFim,
+    });
+  }
+
   @Get(':id')
   @Roles(Role.ADMIN, Role.ATENDENTE, Role.MECANICO)
-  @ApiOperation({ summary: 'Buscar detalhes da ordem de servico por ID' })
-  @ApiOkResponse({ description: 'Detalhes da OS (cabecalho, corpo, rodape)' })
+  @ApiOperation({ summary: 'Buscar ordem de servico por ID (shape plano)' })
+  @ApiOkResponse({ description: 'OS encontrada' })
   @ApiNotFoundResponse({ description: 'OS nao encontrada' })
   async findById(@Param('id', ParseUUIDPipe) id: string) {
+    return this.toResponse(await this.service.findById(id));
+  }
+
+  @Get(':id/detalhes')
+  @Roles(Role.ADMIN, Role.ATENDENTE, Role.MECANICO)
+  @ApiOperation({
+    summary: 'Buscar detalhes da OS (cabecalho, corpo, rodape) — view formatada',
+  })
+  @ApiOkResponse({ description: 'Detalhes da OS estruturados' })
+  @ApiNotFoundResponse({ description: 'OS nao encontrada' })
+  async findByIdDetalhado(@Param('id', ParseUUIDPipe) id: string) {
     return this.service.findByIdDetalhado(id);
   }
 
@@ -415,26 +445,39 @@ export class OrdemDeServicoController {
     }
   }
 
-  @Post(':id/produtos')
+  @Post(':id/servicos/:servicoId/produtos')
   @Roles(Role.ADMIN, Role.MECANICO)
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Adicionar produto do catalogo a OS' })
-  @ApiCreatedResponse({ description: 'Produto adicionado a OS com sucesso' })
-  @ApiNotFoundResponse({ description: 'OS ou produto nao encontrado' })
+  @ApiOperation({
+    summary: 'Adicionar produto do catalogo a um servico ja incluido na OS',
+  })
+  @ApiCreatedResponse({ description: 'Produto adicionado ao servico com sucesso' })
+  @ApiNotFoundResponse({
+    description: 'OS, servico (na OS) ou produto nao encontrado',
+  })
   @ApiBadRequestResponse({
     description: 'Status invalido, quantidade invalida ou dados invalidos',
   })
-  @ApiConflictResponse({ description: 'Produto ja adicionado a OS' })
-  async adicionarProduto(
+  @ApiConflictResponse({ description: 'Produto ja adicionado a esse servico' })
+  async adicionarProdutoAoServico(
     @Param('id', ParseUUIDPipe) id: string,
+    @Param('servicoId', ParseUUIDPipe) servicoId: string,
     @Body() dto: AdicionarProdutoDto,
   ) {
     try {
       return this.toResponse(
-        await this.service.adicionarProduto(id, dto.produtoId, dto.quantidade),
+        await this.service.adicionarProdutoAoServico(
+          id,
+          servicoId,
+          dto.produtoId,
+          dto.quantidade,
+        ),
       );
     } catch (error) {
       if (error instanceof ProdutoNotFoundInCatalogError) {
+        throw new NotFoundException(error.message);
+      }
+      if (error instanceof ServicoNotAddedError) {
         throw new NotFoundException(error.message);
       }
       if (error instanceof ProdutoAlreadyAddedError) {
@@ -450,19 +493,25 @@ export class OrdemDeServicoController {
     }
   }
 
-  @Delete(':id/produtos/:produtoId')
+  @Delete(':id/servicos/:servicoId/produtos/:produtoId')
   @Roles(Role.ADMIN, Role.MECANICO)
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Remover produto da OS' })
-  @ApiNotFoundResponse({ description: 'OS ou produto nao encontrado na OS' })
+  @ApiOperation({ summary: 'Remover produto de um servico da OS' })
+  @ApiNotFoundResponse({
+    description: 'OS, servico (na OS) ou produto nao encontrado',
+  })
   @ApiBadRequestResponse({ description: 'Status invalido para remocao' })
-  async removerProduto(
+  async removerProdutoDoServico(
     @Param('id', ParseUUIDPipe) id: string,
+    @Param('servicoId', ParseUUIDPipe) servicoId: string,
     @Param('produtoId', ParseUUIDPipe) produtoId: string,
   ) {
     try {
-      await this.service.removerProduto(id, produtoId);
+      await this.service.removerProdutoDoServico(id, servicoId, produtoId);
     } catch (error) {
+      if (error instanceof ServicoNotAddedError) {
+        throw new NotFoundException(error.message);
+      }
       if (error instanceof ProdutoNotAddedError) {
         throw new NotFoundException(error.message);
       }
@@ -497,17 +546,23 @@ export class OrdemDeServicoController {
         servicoId: i.servicoId,
         quantidade: i.quantidade,
         precoUnitario: i.precoUnitario,
-        subtotal: i.subtotal(),
+        subtotal:
+          typeof i.subtotalServico === 'function'
+            ? i.subtotalServico()
+            : i.quantidade * Number(i.precoUnitario),
         statusExecucao: i.statusExecucao,
         inicioExecucao: i.inicioExecucao,
         fimExecucao: i.fimExecucao,
         horasTrabalhadas: i.horasTrabalhadas,
-      })),
-      itensProduto: (os.itensProduto ?? []).map((i: any) => ({
-        produtoId: i.produtoId,
-        quantidade: i.quantidade,
-        precoUnitario: i.precoUnitario,
-        subtotal: i.subtotal(),
+        produtos: (i.produtos ?? []).map((p: any) => ({
+          produtoId: p.produtoId,
+          quantidade: p.quantidade,
+          precoUnitario: p.precoUnitario,
+          subtotal:
+            typeof p.subtotal === 'function'
+              ? p.subtotal()
+              : p.quantidade * Number(p.precoUnitario),
+        })),
       })),
       valorTotalServicos:
         typeof os.valorTotalServicos === 'function'

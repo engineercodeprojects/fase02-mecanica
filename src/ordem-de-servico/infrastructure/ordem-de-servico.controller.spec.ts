@@ -55,19 +55,26 @@ const mockOsWithServicos = OrdemDeServico.reconstitute({
   itensServico: [new ItemServicoOS('servico-abc', 2, 100)],
 });
 
-const mockOsWithProdutos = OrdemDeServico.reconstitute({
-  id: 'os-123',
-  numero: 'OS-2026-00001',
-  clienteId: 'cliente-123',
-  veiculoId: 'veiculo-456',
-  usuarioId: 'user-789',
-  descricaoInicial: 'Cliente relata problemas no freio',
-  diagnostico: null,
-  status: StatusOS.EM_DIAGNOSTICO,
-  createdAt: new Date('2026-01-01'),
-  updatedAt: new Date('2026-01-01'),
-  itensProduto: [new ItemProdutoOS('produto-abc', 3, 25)],
-});
+const mockOsWithProdutos = (() => {
+  const os = OrdemDeServico.reconstitute({
+    id: 'os-123',
+    numero: 'OS-2026-00001',
+    clienteId: 'cliente-123',
+    veiculoId: 'veiculo-456',
+    usuarioId: 'user-789',
+    descricaoInicial: 'Cliente relata problemas no freio',
+    diagnostico: null,
+    status: StatusOS.EM_DIAGNOSTICO,
+    createdAt: new Date('2026-01-01'),
+    updatedAt: new Date('2026-01-01'),
+  });
+  os.adicionarServico(new ItemServicoOS('servico-abc', 1, 100));
+  os.adicionarProdutoAoServico(
+    'servico-abc',
+    new ItemProdutoOS('produto-abc', 3, 25),
+  );
+  return os;
+})();
 
 const mockDetalhesView = {
   cabecalho: {
@@ -93,7 +100,6 @@ const mockDetalhesView = {
   corpo: {
     diagnostico: null,
     servicos: [],
-    produtos: [],
   },
   rodape: {
     valorTotalServicos: 0,
@@ -116,10 +122,11 @@ const mockService = {
   entregar: jest.fn(),
   adicionarServico: jest.fn(),
   removerServico: jest.fn(),
-  adicionarProduto: jest.fn(),
-  removerProduto: jest.fn(),
+  adicionarProdutoAoServico: jest.fn(),
+  removerProdutoDoServico: jest.fn(),
   iniciarServico: jest.fn(),
   concluirServico: jest.fn(),
+  getTempoMedioExecucao: jest.fn(),
   delete: jest.fn(),
 };
 
@@ -235,10 +242,25 @@ describe('OrdemDeServicoController', () => {
   // ==================== GET /ordens-servico/:id ====================
 
   describe('findById', () => {
-    it('should return detailed OS view when found', async () => {
-      mockService.findByIdDetalhado.mockResolvedValue(mockDetalhesView);
+    it('should return flat OS shape (consumed by admin frontend) when found', async () => {
+      mockService.findById.mockResolvedValue(mockOs);
 
       const result = await controller.findById('os-123');
+
+      expect(result.id).toBe('os-123');
+      expect(result.numero).toBe('OS-2026-00001');
+      expect(result.clienteId).toBe('cliente-123');
+      expect(result.status).toBe(StatusOS.RECEBIDA);
+      expect(result.itensServico).toBeDefined();
+      expect(mockService.findById).toHaveBeenCalledWith('os-123');
+    });
+  });
+
+  describe('findByIdDetalhado', () => {
+    it('should return structured detail view (cabecalho/corpo/rodape)', async () => {
+      mockService.findByIdDetalhado.mockResolvedValue(mockDetalhesView);
+
+      const result = await controller.findByIdDetalhado('os-123');
 
       expect(result.cabecalho.dadosCliente.id).toBe('cliente-123');
       expect(result.cabecalho.dadosVeiculo.id).toBe('veiculo-456');
@@ -651,87 +673,115 @@ describe('OrdemDeServicoController', () => {
     });
   });
 
-  // ==================== POST /ordens-servico/:id/produtos ====================
+  // ==================== POST /ordens-servico/:id/servicos/:servicoId/produtos ====================
 
-  describe('adicionarProduto', () => {
+  describe('adicionarProdutoAoServico', () => {
     const dto = { produtoId: 'produto-abc', quantidade: 3 };
 
-    it('should add produto to OS and return response with itensProduto', async () => {
-      mockService.adicionarProduto.mockResolvedValue(mockOsWithProdutos);
+    it('should add produto to servico and return response with produtos aninhados', async () => {
+      mockService.adicionarProdutoAoServico.mockResolvedValue(mockOsWithProdutos);
 
-      const result = await controller.adicionarProduto('os-123', dto);
+      const result = await controller.adicionarProdutoAoServico(
+        'os-123',
+        'servico-abc',
+        dto,
+      );
 
       expect(result).toBeDefined();
-      expect(result.itensProduto).toHaveLength(1);
-      expect(result.itensProduto[0].subtotal).toBe(75);
-      expect(mockService.adicionarProduto).toHaveBeenCalledWith('os-123', 'produto-abc', 3);
+      const servico = result.itensServico.find(
+        (s: any) => s.servicoId === 'servico-abc',
+      );
+      expect(servico.produtos).toHaveLength(1);
+      expect(servico.produtos[0].subtotal).toBe(75);
+      expect(mockService.adicionarProdutoAoServico).toHaveBeenCalledWith(
+        'os-123',
+        'servico-abc',
+        'produto-abc',
+        3,
+      );
     });
 
     it('should throw NotFoundException for ProdutoNotFoundInCatalogError', async () => {
-      mockService.adicionarProduto.mockRejectedValue(
+      mockService.adicionarProdutoAoServico.mockRejectedValue(
         new ProdutoNotFoundInCatalogError('produto-abc'),
       );
-      await expect(controller.adicionarProduto('os-123', dto)).rejects.toThrow(NotFoundException);
-    });
-
-    it('should throw ConflictException for ProdutoAlreadyAddedError', async () => {
-      mockService.adicionarProduto.mockRejectedValue(
-        new ProdutoAlreadyAddedError('produto-abc'),
-      );
-      await expect(controller.adicionarProduto('os-123', dto)).rejects.toThrow(ConflictException);
-    });
-
-    it('should throw BadRequestException for InvalidStatusTransitionError in adicionarProduto', async () => {
-      mockService.adicionarProduto.mockRejectedValue(
-        new InvalidStatusTransitionError(StatusOS.RECEBIDA, StatusOS.EM_EXECUCAO),
-      );
-      await expect(controller.adicionarProduto('os-123', dto)).rejects.toThrow(BadRequestException);
-    });
-
-    it('should throw BadRequestException for InvalidQuantityError in adicionarProduto', async () => {
-      mockService.adicionarProduto.mockRejectedValue(new InvalidQuantityError(0));
-      await expect(controller.adicionarProduto('os-123', dto)).rejects.toThrow(BadRequestException);
-    });
-
-    it('should rethrow unknown errors in adicionarProduto', async () => {
-      mockService.adicionarProduto.mockRejectedValue(new Error('unexpected'));
-      await expect(controller.adicionarProduto('os-123', dto)).rejects.toThrow('unexpected');
-    });
-  });
-
-  // ==================== DELETE /ordens-servico/:id/produtos/:produtoId ====================
-
-  describe('removerProduto', () => {
-    it('should remove produto from OS successfully', async () => {
-      mockService.removerProduto.mockResolvedValue(undefined);
-
-      await controller.removerProduto('os-123', 'produto-abc');
-
-      expect(mockService.removerProduto).toHaveBeenCalledWith('os-123', 'produto-abc');
-    });
-
-    it('should throw NotFoundException for ProdutoNotAddedError', async () => {
-      mockService.removerProduto.mockRejectedValue(
-        new ProdutoNotAddedError('produto-abc'),
-      );
       await expect(
-        controller.removerProduto('os-123', 'produto-abc'),
+        controller.adicionarProdutoAoServico('os-123', 'servico-abc', dto),
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('should throw BadRequestException for InvalidStatusTransitionError in removerProduto', async () => {
-      mockService.removerProduto.mockRejectedValue(
+    it('should throw ConflictException for ProdutoAlreadyAddedError', async () => {
+      mockService.adicionarProdutoAoServico.mockRejectedValue(
+        new ProdutoAlreadyAddedError('produto-abc'),
+      );
+      await expect(
+        controller.adicionarProdutoAoServico('os-123', 'servico-abc', dto),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('should throw BadRequestException for InvalidStatusTransitionError', async () => {
+      mockService.adicionarProdutoAoServico.mockRejectedValue(
         new InvalidStatusTransitionError(StatusOS.RECEBIDA, StatusOS.EM_EXECUCAO),
       );
       await expect(
-        controller.removerProduto('os-123', 'produto-abc'),
+        controller.adicionarProdutoAoServico('os-123', 'servico-abc', dto),
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('should rethrow unknown errors in removerProduto', async () => {
-      mockService.removerProduto.mockRejectedValue(new Error('unexpected'));
+    it('should throw BadRequestException for InvalidQuantityError', async () => {
+      mockService.adicionarProdutoAoServico.mockRejectedValue(
+        new InvalidQuantityError(0),
+      );
       await expect(
-        controller.removerProduto('os-123', 'produto-abc'),
+        controller.adicionarProdutoAoServico('os-123', 'servico-abc', dto),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should rethrow unknown errors', async () => {
+      mockService.adicionarProdutoAoServico.mockRejectedValue(new Error('unexpected'));
+      await expect(
+        controller.adicionarProdutoAoServico('os-123', 'servico-abc', dto),
+      ).rejects.toThrow('unexpected');
+    });
+  });
+
+  // =============== DELETE /ordens-servico/:id/servicos/:servicoId/produtos/:produtoId ==============
+
+  describe('removerProdutoDoServico', () => {
+    it('should remove produto from servico successfully', async () => {
+      mockService.removerProdutoDoServico.mockResolvedValue(undefined);
+
+      await controller.removerProdutoDoServico('os-123', 'servico-abc', 'produto-abc');
+
+      expect(mockService.removerProdutoDoServico).toHaveBeenCalledWith(
+        'os-123',
+        'servico-abc',
+        'produto-abc',
+      );
+    });
+
+    it('should throw NotFoundException for ProdutoNotAddedError', async () => {
+      mockService.removerProdutoDoServico.mockRejectedValue(
+        new ProdutoNotAddedError('produto-abc'),
+      );
+      await expect(
+        controller.removerProdutoDoServico('os-123', 'servico-abc', 'produto-abc'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw BadRequestException for InvalidStatusTransitionError', async () => {
+      mockService.removerProdutoDoServico.mockRejectedValue(
+        new InvalidStatusTransitionError(StatusOS.RECEBIDA, StatusOS.EM_EXECUCAO),
+      );
+      await expect(
+        controller.removerProdutoDoServico('os-123', 'servico-abc', 'produto-abc'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should rethrow unknown errors', async () => {
+      mockService.removerProdutoDoServico.mockRejectedValue(new Error('unexpected'));
+      await expect(
+        controller.removerProdutoDoServico('os-123', 'servico-abc', 'produto-abc'),
       ).rejects.toThrow('unexpected');
     });
   });

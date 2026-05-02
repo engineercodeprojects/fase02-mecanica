@@ -36,10 +36,12 @@ const mockPrisma = {
   itemOrdemDeServicoServico: {
     deleteMany: jest.fn(),
     createMany: jest.fn(),
+    create: jest.fn(),
   },
   itemOrdemDeServicoProduto: {
     deleteMany: jest.fn(),
     createMany: jest.fn(),
+    create: jest.fn(),
   },
   $transaction: jest.fn(),
 };
@@ -189,11 +191,7 @@ describe('PrismaOrdemDeServicoRepository', () => {
           },
           itemOrdemDeServicoServico: {
             deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
-            createMany: jest.fn().mockResolvedValue({ count: 0 }),
-          },
-          itemOrdemDeServicoProduto: {
-            deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
-            createMany: jest.fn().mockResolvedValue({ count: 0 }),
+            create: jest.fn().mockResolvedValue({ id: 'item-1' }),
           },
         };
         return cb(tx);
@@ -218,8 +216,9 @@ describe('PrismaOrdemDeServicoRepository', () => {
       expect(mockPrisma.$transaction).toHaveBeenCalled();
     });
 
-    it('should call createMany when OS has itensServico', async () => {
-      let createManyCalled = false;
+    it('should call create per servico when OS has itensServico', async () => {
+      let createCalled = false;
+      let lastCreateArgs: any = null;
 
       mockPrisma.$transaction.mockImplementation(async (cb: any) => {
         const tx = {
@@ -229,14 +228,11 @@ describe('PrismaOrdemDeServicoRepository', () => {
           },
           itemOrdemDeServicoServico: {
             deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
-            createMany: jest.fn().mockImplementation(() => {
-              createManyCalled = true;
-              return Promise.resolve({ count: 1 });
+            create: jest.fn().mockImplementation((args) => {
+              createCalled = true;
+              lastCreateArgs = args;
+              return Promise.resolve({ id: 'item-1' });
             }),
-          },
-          itemOrdemDeServicoProduto: {
-            deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
-            createMany: jest.fn().mockResolvedValue({ count: 0 }),
           },
         };
         return cb(tx);
@@ -260,7 +256,9 @@ describe('PrismaOrdemDeServicoRepository', () => {
       const result = await repository.update(os);
 
       expect(result).toBeInstanceOf(OrdemDeServico);
-      expect(createManyCalled).toBe(true);
+      expect(createCalled).toBe(true);
+      expect(lastCreateArgs.data.servicoId).toBe('serv-abc');
+      expect(lastCreateArgs.data.produtos).toEqual({ create: [] });
     });
   });
 
