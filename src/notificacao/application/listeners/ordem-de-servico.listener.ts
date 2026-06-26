@@ -7,6 +7,7 @@ import {
 } from '../../../cliente/domain/cliente.repository';
 import { OrcamentoProntoEvent } from '../../../ordem-de-servico/domain/events/orcamento-pronto.event';
 import { OsFinalizadaEvent } from '../../../ordem-de-servico/domain/events/os-finalizada.event';
+import { OsStatusAlteradoEvent } from '../../../ordem-de-servico/domain/events/os-status-alterado.event';
 import { CanalNotificacao } from '../../domain/value-objects/canal-notificacao.vo';
 import { TipoNotificacao } from '../../domain/value-objects/tipo-notificacao.vo';
 import { NotificacaoService } from '../notificacao.service';
@@ -101,6 +102,36 @@ export class OrdemDeServicoNotificacaoListener {
     } catch (err) {
       this.logger.error(
         `Erro ao processar OsFinalizadaEvent para OS ${event.numero}`,
+        err instanceof Error ? err.stack : String(err),
+      );
+    }
+  }
+
+  @OnEvent(OsStatusAlteradoEvent.EVENT_NAME)
+  async onOsStatusAlterado(event: OsStatusAlteradoEvent): Promise<void> {
+    try {
+      const cliente = await this.clienteRepository.findById(event.clienteId);
+      const destinatario = cliente?.email ?? event.clienteId;
+      const mensagem =
+        `Status da Ordem de Servico ${event.numero} alterado.\n\n` +
+        `Status anterior: ${event.statusAnterior}\n` +
+        `Status atual: ${event.statusAtual}\n`;
+
+      await this.notificacaoService.enviar({
+        clienteId: event.clienteId,
+        ordemDeServicoId: event.ordemDeServicoId,
+        tipo: TipoNotificacao.STATUS_OS_ALTERADO,
+        canal: CanalNotificacao.EMAIL,
+        destinatario,
+        assunto: `Status da OS ${event.numero}: ${event.statusAtual}`,
+        mensagem,
+        statusAnterior: event.statusAnterior,
+        statusAtual: event.statusAtual,
+        timestamp: event.timestamp,
+      });
+    } catch (err) {
+      this.logger.error(
+        `Erro ao processar OsStatusAlteradoEvent para OS ${event.numero}`,
         err instanceof Error ? err.stack : String(err),
       );
     }

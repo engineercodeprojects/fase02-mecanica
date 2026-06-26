@@ -24,6 +24,8 @@ import { ItemServicoOS } from '../domain/value-objects/item-servico-os.vo';
 import { ItemProdutoOS } from '../domain/value-objects/item-produto-os.vo';
 import { OrcamentoProntoEvent } from '../domain/events/orcamento-pronto.event';
 import { OsFinalizadaEvent } from '../domain/events/os-finalizada.event';
+import { OsStatusAlteradoEvent } from '../domain/events/os-status-alterado.event';
+import { StatusOS } from '../domain/value-objects/status-os.vo';
 import { ClienteRepository, CLIENTE_REPOSITORY } from '../../cliente/domain/cliente.repository';
 import { VeiculoRepository, VEICULO_REPOSITORY } from '../../veiculo/domain/veiculo.repository';
 import { ServicoRepository, SERVICO_REPOSITORY } from '../../servico/domain/servico.repository';
@@ -166,6 +168,35 @@ export class OrdemDeServicoService {
     };
   }
 
+  private async updateAndEmitStatusChange(
+    ordemDeServico: OrdemDeServico,
+    statusAnterior: StatusOS,
+  ): Promise<OrdemDeServico> {
+    const updated = await this.repository.update(ordemDeServico);
+    this.emitStatusChangeIfNeeded(updated, statusAnterior);
+    return updated;
+  }
+
+  private emitStatusChangeIfNeeded(
+    ordemDeServico: OrdemDeServico,
+    statusAnterior: StatusOS,
+  ): void {
+    if (ordemDeServico.status === statusAnterior || !ordemDeServico.id) {
+      return;
+    }
+
+    this.eventEmitter.emit(
+      OsStatusAlteradoEvent.EVENT_NAME,
+      new OsStatusAlteradoEvent(
+        ordemDeServico.id,
+        ordemDeServico.numero,
+        ordemDeServico.clienteId,
+        statusAnterior,
+        ordemDeServico.status,
+      ),
+    );
+  }
+
   private formatDateTime(date: Date | undefined): string | null {
     if (!date) return null;
     const d = new Date(date);
@@ -182,8 +213,9 @@ export class OrdemDeServicoService {
     usuarioId: string,
   ): Promise<OrdemDeServico> {
     const ordemDeServico = await this.findById(id);
+    const statusAnterior = ordemDeServico.status;
     ordemDeServico.atribuirMecanico(usuarioId);
-    return this.repository.update(ordemDeServico);
+    return this.updateAndEmitStatusChange(ordemDeServico, statusAnterior);
   }
 
   async completarDiagnostico(
@@ -191,8 +223,12 @@ export class OrdemDeServicoService {
     diagnostico: string,
   ): Promise<OrdemDeServico> {
     const ordemDeServico = await this.findById(id);
+    const statusAnterior = ordemDeServico.status;
     ordemDeServico.completarDiagnostico(diagnostico);
-    const updated = await this.repository.update(ordemDeServico);
+    const updated = await this.updateAndEmitStatusChange(
+      ordemDeServico,
+      statusAnterior,
+    );
     this.eventEmitter.emit(
       OrcamentoProntoEvent.EVENT_NAME,
       new OrcamentoProntoEvent(
@@ -208,14 +244,16 @@ export class OrdemDeServicoService {
 
   async aprovarOrcamento(id: string): Promise<OrdemDeServico> {
     const ordemDeServico = await this.findById(id);
+    const statusAnterior = ordemDeServico.status;
     ordemDeServico.aprovar();
-    return this.repository.update(ordemDeServico);
+    return this.updateAndEmitStatusChange(ordemDeServico, statusAnterior);
   }
 
   async rejeitarOrcamento(id: string): Promise<OrdemDeServico> {
     const ordemDeServico = await this.findById(id);
+    const statusAnterior = ordemDeServico.status;
     ordemDeServico.rejeitar();
-    return this.repository.update(ordemDeServico);
+    return this.updateAndEmitStatusChange(ordemDeServico, statusAnterior);
   }
 
   async assertOsPertenceAoCliente(
@@ -250,8 +288,10 @@ export class OrdemDeServicoService {
     horasTrabalhadas: number,
   ): Promise<OrdemDeServico> {
     const ordemDeServico = await this.findById(osId);
+    const statusAnterior = ordemDeServico.status;
     ordemDeServico.concluirServico(servicoId, horasTrabalhadas);
     const updated = await this.repository.update(ordemDeServico);
+    this.emitStatusChangeIfNeeded(updated, statusAnterior);
     if (updated.status === 'FINALIZADA') {
       this.eventEmitter.emit(
         OsFinalizadaEvent.EVENT_NAME,
@@ -263,8 +303,10 @@ export class OrdemDeServicoService {
 
   async finalizarExecucao(id: string): Promise<OrdemDeServico> {
     const ordemDeServico = await this.findById(id);
+    const statusAnterior = ordemDeServico.status;
     ordemDeServico.finalizarExecucao();
     const updated = await this.repository.update(ordemDeServico);
+    this.emitStatusChangeIfNeeded(updated, statusAnterior);
     this.eventEmitter.emit(
       OsFinalizadaEvent.EVENT_NAME,
       new OsFinalizadaEvent(updated.id!, updated.numero, updated.clienteId),
@@ -274,8 +316,9 @@ export class OrdemDeServicoService {
 
   async entregar(id: string): Promise<OrdemDeServico> {
     const ordemDeServico = await this.findById(id);
+    const statusAnterior = ordemDeServico.status;
     ordemDeServico.entregar();
-    return this.repository.update(ordemDeServico);
+    return this.updateAndEmitStatusChange(ordemDeServico, statusAnterior);
   }
 
   async delete(id: string): Promise<void> {

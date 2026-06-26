@@ -7,6 +7,8 @@ import {
 import { Cliente } from '../../../cliente/domain/cliente.entity';
 import { OrcamentoProntoEvent } from '../../../ordem-de-servico/domain/events/orcamento-pronto.event';
 import { OsFinalizadaEvent } from '../../../ordem-de-servico/domain/events/os-finalizada.event';
+import { OsStatusAlteradoEvent } from '../../../ordem-de-servico/domain/events/os-status-alterado.event';
+import { StatusOS } from '../../../ordem-de-servico/domain/value-objects/status-os.vo';
 import { CanalNotificacao } from '../../domain/value-objects/canal-notificacao.vo';
 import { TipoNotificacao } from '../../domain/value-objects/tipo-notificacao.vo';
 import { NotificacaoService } from '../notificacao.service';
@@ -148,6 +150,52 @@ describe('OrdemDeServicoNotificacaoListener', () => {
       clienteRepository.findById.mockRejectedValueOnce(new Error('db down'));
 
       await expect(listener.onOsFinalizada(event)).resolves.toBeUndefined();
+    });
+  });
+
+  describe('onOsStatusAlterado', () => {
+    const event = new OsStatusAlteradoEvent(
+      'os-id-3',
+      'OS-2026-003',
+      'cliente-1',
+      StatusOS.EM_EXECUCAO,
+      StatusOS.FINALIZADA,
+      new Date('2026-06-25T10:00:00.000Z'),
+    );
+
+    it('envia notificacao com status anterior, status atual e timestamp', async () => {
+      clienteRepository.findById.mockResolvedValueOnce(clienteComEmail);
+
+      await listener.onOsStatusAlterado(event);
+
+      expect(notificacaoService.enviar).toHaveBeenCalledTimes(1);
+      expect(notificacaoService.enviar).toHaveBeenCalledWith(
+        expect.objectContaining({
+          clienteId: 'cliente-1',
+          ordemDeServicoId: 'os-id-3',
+          tipo: TipoNotificacao.STATUS_OS_ALTERADO,
+          canal: CanalNotificacao.EMAIL,
+          destinatario: 'joao@email.com',
+          statusAnterior: StatusOS.EM_EXECUCAO,
+          statusAtual: StatusOS.FINALIZADA,
+          timestamp: new Date('2026-06-25T10:00:00.000Z'),
+        }),
+      );
+    });
+
+    it('usa clienteId como destinatario quando cliente nao tem email', async () => {
+      clienteRepository.findById.mockResolvedValueOnce(clienteSemEmail);
+
+      await listener.onOsStatusAlterado(event);
+
+      const arg = notificacaoService.enviar.mock.calls[0][0];
+      expect(arg.destinatario).toBe('cliente-1');
+    });
+
+    it('engole erros para nao bloquear fluxo principal', async () => {
+      clienteRepository.findById.mockRejectedValueOnce(new Error('db down'));
+
+      await expect(listener.onOsStatusAlterado(event)).resolves.toBeUndefined();
     });
   });
 });

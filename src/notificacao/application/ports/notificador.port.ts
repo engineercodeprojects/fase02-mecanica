@@ -4,6 +4,14 @@ export interface MensagemNotificacao {
   destinatario: string;
   assunto: string;
   corpo: string;
+  contexto?: {
+    ordemId?: string;
+    clienteId?: string;
+    statusAnterior?: string;
+    statusAtual?: string;
+    timestamp?: Date | string;
+    tipoNotificacao?: string;
+  };
 }
 
 export interface Notificador {

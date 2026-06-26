@@ -9,6 +9,7 @@ import {
 import { ItemServicoInvalidStatusError } from '../domain/errors/item-servico-invalid-status.error';
 import { ServicoNotAddedError } from '../domain/errors/servico-not-added.error';
 import { OsFinalizadaEvent } from '../domain/events/os-finalizada.event';
+import { OsStatusAlteradoEvent } from '../domain/events/os-status-alterado.event';
 import { ClienteNotFoundError } from '../domain/errors/cliente-not-found.error';
 import { VeiculoNotFoundError } from '../domain/errors/veiculo-not-found.error';
 import { VeiculoClienteMismatchError } from '../domain/errors/veiculo-cliente-mismatch.error';
@@ -517,6 +518,14 @@ describe('OrdemDeServicoService', () => {
 
       expect(result).toBeDefined();
       expect(repository.update).toHaveBeenCalled();
+      expect((service as any).eventEmitter.emit).toHaveBeenCalledWith(
+        OsStatusAlteradoEvent.EVENT_NAME,
+        expect.objectContaining({
+          ordemDeServicoId: 'os-123',
+          statusAnterior: StatusOS.AGUARDANDO_APROVACAO,
+          statusAtual: StatusOS.EM_EXECUCAO,
+        }),
+      );
     });
   });
 

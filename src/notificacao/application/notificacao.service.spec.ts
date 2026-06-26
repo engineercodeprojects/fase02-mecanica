@@ -84,6 +84,14 @@ describe('NotificacaoService', () => {
         destinatario: input.destinatario,
         assunto: input.assunto,
         corpo: input.mensagem,
+        contexto: {
+          ordemId: input.ordemDeServicoId,
+          clienteId: input.clienteId,
+          statusAnterior: undefined,
+          statusAtual: undefined,
+          timestamp: undefined,
+          tipoNotificacao: input.tipo,
+        },
       });
       expect(repository.create).toHaveBeenCalledTimes(1);
       expect(result.status).toBe(StatusNotificacao.ENVIADA);
