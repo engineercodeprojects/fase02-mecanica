@@ -1,19 +1,35 @@
-FROM node:20-alpine
-
+# ─── Stage 1: builder ────────────────────────────────────────────────────────
+FROM node:20-alpine AS builder
 WORKDIR /app
 
 COPY package*.json ./
 RUN npm ci
 
 COPY . .
-RUN npx prisma generate
-RUN npm run build
+RUN npx prisma generate && npm run build
 
-# Executa como usuario nao-root (OWASP A05 - Security Misconfiguration)
-RUN chown -R node:node /app
+# ─── Stage 2: runtime ────────────────────────────────────────────────────────
+FROM node:20-alpine AS runtime
+WORKDIR /app
+
+COPY --chown=node:node package*.json ./
+RUN npm ci --omit=dev && npm cache clean --force
+
+COPY --chown=node:node --from=builder /app/node_modules/prisma ./node_modules/prisma
+COPY --chown=node:node --from=builder /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
+
+COPY --chown=node:node --from=builder /app/dist ./dist
+
+COPY --chown=node:node prisma ./prisma
+
+COPY --chown=node:node prisma.config.ts ./prisma.config.ts
+
+COPY --chown=node:node --from=builder /app/node_modules/dotenv ./node_modules/dotenv
+
 USER node
 
 EXPOSE 3000
 
-# `exec` faz o node virar PID 1 e receber SIGTERM (graceful shutdown em rolling deploys)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 CMD wget -qO- http://localhost:3000/health || exit 1
+
 CMD ["sh", "-c", "npx prisma migrate deploy && exec node dist/main.js"]
