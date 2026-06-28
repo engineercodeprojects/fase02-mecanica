@@ -7,9 +7,12 @@ function makePrisma(queryImpl: () => Promise<unknown>): PrismaService {
 }
 
 describe('HealthController', () => {
-  it('liveness returns ok', () => {
+  it('liveness returns ok with timestamp', () => {
     const controller = new HealthController(makePrisma(async () => [{ ok: 1 }]));
-    expect(controller.liveness()).toEqual({ status: 'ok' });
+    const result = controller.liveness();
+    expect(result.status).toBe('ok');
+    expect(typeof result.timestamp).toBe('string');
+    expect(() => new Date(result.timestamp)).not.toThrow();
   });
 
   it('readiness returns ready when the database responds', async () => {

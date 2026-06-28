@@ -3,34 +3,30 @@ import {
   Get,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiOkResponse, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { SkipThrottle } from '@nestjs/throttler';
 import { Public } from '../auth/infrastructure/decorators/public.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 
-/**
- * Endpoints de health para probes do orquestrador (ex.: Kubernetes).
- * Publicos (sem JWT) e isentos de rate-limit, pois sao chamados de forma
- * recorrente pela plataforma.
- */
 @ApiTags('Health')
 @SkipThrottle()
 @Controller('health')
 export class HealthController {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Liveness: o processo esta de pe e respondendo. */
   @Get()
   @Public()
-  @ApiOperation({ summary: 'Liveness probe' })
-  liveness(): { status: string } {
-    return { status: 'ok' };
+  @ApiOperation({ summary: 'Liveness probe — o processo está de pé' })
+  @ApiOkResponse({ description: 'Aplicação respondendo', schema: { example: { status: 'ok', timestamp: '2024-01-01T00:00:00.000Z' } } })
+  liveness(): { status: string; timestamp: string } {
+    return { status: 'ok', timestamp: new Date().toISOString() };
   }
 
-  /** Readiness: pronto para receber trafego (dependencias criticas OK). */
   @Get('ready')
   @Public()
-  @ApiOperation({ summary: 'Readiness probe (verifica conectividade com o banco)' })
+  @ApiOperation({ summary: 'Readiness probe — verifica conectividade com o banco' })
+  @ApiOkResponse({ description: 'Banco acessível', schema: { example: { status: 'ready' } } })
+  @ApiResponse({ status: 503, description: 'Banco inacessível', schema: { example: { status: 'not-ready', database: 'unreachable' } } })
   async readiness(): Promise<{ status: string }> {
     try {
       await this.prisma.$queryRaw`SELECT 1`;
