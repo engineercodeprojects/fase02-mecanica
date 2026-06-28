@@ -1,13 +1,16 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { PrismaService } from '../../prisma/prisma.service';
-import { PrismaUsuarioRepository } from './prisma-usuario.repository';
-import { Usuario } from '../domain/usuario.entity';
-import { Role } from '../domain/role.enum';
-import { startTestDatabase, stopTestDatabase } from '../../test/database.container';
+import { Test, TestingModule } from "@nestjs/testing";
+import { PrismaService } from "../../prisma/prisma.service";
+import { PrismaUsuarioRepository } from "./prisma-usuario.repository";
+import { Usuario } from "../domain/usuario.entity";
+import { Role } from "../domain/role.enum";
+import {
+  startTestDatabase,
+  stopTestDatabase,
+} from "../../test/database.container";
 
 jest.setTimeout(60000);
 
-describe('PrismaUsuarioRepository (integration)', () => {
+describe("PrismaUsuarioRepository (integration)", () => {
   let repository: PrismaUsuarioRepository;
   let prisma: PrismaService;
 
@@ -26,7 +29,9 @@ describe('PrismaUsuarioRepository (integration)', () => {
   });
 
   afterAll(async () => {
-    await prisma.onModuleDestroy();
+    if (prisma) {
+      await prisma.onModuleDestroy();
+    }
     await stopTestDatabase();
   });
 
@@ -34,104 +39,112 @@ describe('PrismaUsuarioRepository (integration)', () => {
     await prisma.usuario.deleteMany();
   });
 
-  describe('create', () => {
-    it('should persist and return a Usuario with generated id', async () => {
+  describe("create", () => {
+    it("should persist and return a Usuario with generated id", async () => {
       const usuario = Usuario.create({
-        nome: 'Joao Silva',
-        email: 'joao@oficina.com',
-        senhaHash: '$2b$10$hashed',
+        nome: "Joao Silva",
+        email: "joao@oficina.com",
+        senhaHash: "$2b$10$hashed",
         role: Role.ATENDENTE,
       });
 
       const result = await repository.create(usuario);
 
       expect(result.id).toBeDefined();
-      expect(result.nome).toBe('Joao Silva');
-      expect(result.email.value).toBe('joao@oficina.com');
+      expect(result.nome).toBe("Joao Silva");
+      expect(result.email.value).toBe("joao@oficina.com");
       expect(result.role).toBe(Role.ATENDENTE);
       expect(result.ativo).toBe(true);
     });
 
-    it('should normalize email to lowercase on persist', async () => {
+    it("should normalize email to lowercase on persist", async () => {
       const usuario = Usuario.create({
-        nome: 'Test',
-        email: 'USER@OFICINA.COM',
-        senhaHash: '$2b$10$hashed',
+        nome: "Test",
+        email: "USER@OFICINA.COM",
+        senhaHash: "$2b$10$hashed",
         role: Role.ADMIN,
       });
 
       const result = await repository.create(usuario);
-      expect(result.email.value).toBe('user@oficina.com');
+      expect(result.email.value).toBe("user@oficina.com");
     });
   });
 
-  describe('findByEmail', () => {
-    it('should find a Usuario by email', async () => {
+  describe("findByEmail", () => {
+    it("should find a Usuario by email", async () => {
       await repository.create(
         Usuario.create({
-          nome: 'Maria',
-          email: 'maria@oficina.com',
-          senhaHash: '$2b$10$h',
+          nome: "Maria",
+          email: "maria@oficina.com",
+          senhaHash: "$2b$10$h",
           role: Role.ADMIN,
         }),
       );
 
-      const found = await repository.findByEmail('maria@oficina.com');
+      const found = await repository.findByEmail("maria@oficina.com");
       expect(found).not.toBeNull();
       expect(found!.role).toBe(Role.ADMIN);
     });
 
-    it('should be case-insensitive', async () => {
+    it("should be case-insensitive", async () => {
       await repository.create(
         Usuario.create({
-          nome: 'Maria',
-          email: 'maria@oficina.com',
-          senhaHash: '$2b$10$h',
+          nome: "Maria",
+          email: "maria@oficina.com",
+          senhaHash: "$2b$10$h",
           role: Role.ADMIN,
         }),
       );
 
-      const found = await repository.findByEmail('MARIA@OFICINA.COM');
+      const found = await repository.findByEmail("MARIA@OFICINA.COM");
       expect(found).not.toBeNull();
     });
 
-    it('should return null when not found', async () => {
-      const found = await repository.findByEmail('inexistente@oficina.com');
+    it("should return null when not found", async () => {
+      const found = await repository.findByEmail("inexistente@oficina.com");
       expect(found).toBeNull();
     });
   });
 
-  describe('findById', () => {
-    it('should find a Usuario by id', async () => {
+  describe("findById", () => {
+    it("should find a Usuario by id", async () => {
       const created = await repository.create(
         Usuario.create({
-          nome: 'Carlos',
-          email: 'carlos@oficina.com',
-          senhaHash: '$2b$10$h',
+          nome: "Carlos",
+          email: "carlos@oficina.com",
+          senhaHash: "$2b$10$h",
           role: Role.MECANICO,
         }),
       );
 
       const found = await repository.findById(created.id!);
       expect(found).not.toBeNull();
-      expect(found!.nome).toBe('Carlos');
+      expect(found!.nome).toBe("Carlos");
     });
 
-    it('should return null when not found', async () => {
-      const found = await repository.findById('00000000-0000-0000-0000-000000000000');
+    it("should return null when not found", async () => {
+      const found = await repository.findById(
+        "00000000-0000-0000-0000-000000000000",
+      );
       expect(found).toBeNull();
     });
   });
 
-  describe('role persistence', () => {
-    it('should persist all role types correctly', async () => {
-      const roles = [Role.ADMIN, Role.ATENDENTE, Role.MECANICO, Role.ESTOQUISTA, Role.CLIENTE];
+  describe("role persistence", () => {
+    it("should persist all role types correctly", async () => {
+      const roles = [
+        Role.ADMIN,
+        Role.ATENDENTE,
+        Role.MECANICO,
+        Role.ESTOQUISTA,
+        Role.CLIENTE,
+      ];
 
       for (const role of roles) {
         const usuario = Usuario.create({
           nome: `User ${role}`,
           email: `${role.toLowerCase()}@oficina.com`,
-          senhaHash: '$2b$10$h',
+          senhaHash: "$2b$10$h",
           role,
         });
         const result = await repository.create(usuario);
