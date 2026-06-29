@@ -1,7 +1,9 @@
+import { DomainEvent } from '../../../shared/domain/domain-event';
 import { StatusOS } from '../value-objects/status-os.vo';
 
-export class OsStatusAlteradoEvent {
+export class OsStatusAlteradoEvent implements DomainEvent {
   static readonly EVENT_NAME = 'os.status-alterado';
+  readonly eventName = OsStatusAlteradoEvent.EVENT_NAME;
 
   constructor(
     public readonly ordemDeServicoId: string,
