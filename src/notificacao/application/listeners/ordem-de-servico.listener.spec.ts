@@ -155,8 +155,8 @@ describe('OrdemDeServicoNotificacaoListener', () => {
       'os-id-3',
       'OS-2026-003',
       'cliente-1',
+      StatusOS.AGUARDANDO_APROVACAO,
       StatusOS.EM_EXECUCAO,
-      StatusOS.FINALIZADA,
       new Date('2026-06-25T10:00:00.000Z'),
     );
 
@@ -173,12 +173,31 @@ describe('OrdemDeServicoNotificacaoListener', () => {
           tipo: TipoNotificacao.STATUS_OS_ALTERADO,
           canal: CanalNotificacao.EMAIL,
           destinatario: 'joao@email.com',
-          statusAnterior: StatusOS.EM_EXECUCAO,
-          statusAtual: StatusOS.FINALIZADA,
+          statusAnterior: StatusOS.AGUARDANDO_APROVACAO,
+          statusAtual: StatusOS.EM_EXECUCAO,
           timestamp: new Date('2026-06-25T10:00:00.000Z'),
         }),
       );
     });
+
+    it.each([StatusOS.AGUARDANDO_APROVACAO, StatusOS.FINALIZADA])(
+      'nao envia notificacao generica quando o status %s ja possui notificacao dedicada',
+      async (statusAtual) => {
+        const eventoDedicado = new OsStatusAlteradoEvent(
+          'os-id-4',
+          'OS-2026-004',
+          'cliente-1',
+          StatusOS.EM_EXECUCAO,
+          statusAtual,
+          new Date('2026-06-25T10:00:00.000Z'),
+        );
+
+        await listener.onOsStatusAlterado(eventoDedicado);
+
+        expect(enviarNotificacao.execute).not.toHaveBeenCalled();
+        expect(clienteRepository.findById).not.toHaveBeenCalled();
+      },
+    );
 
     it('usa clienteId como destinatario quando cliente nao tem email', async () => {
       clienteRepository.findById.mockResolvedValueOnce(clienteSemEmail);

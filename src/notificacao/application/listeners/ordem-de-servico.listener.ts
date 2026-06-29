@@ -7,10 +7,22 @@ import {
 import { OrcamentoProntoEvent } from '../../../ordem-de-servico/domain/events/orcamento-pronto.event';
 import { OsFinalizadaEvent } from '../../../ordem-de-servico/domain/events/os-finalizada.event';
 import { OsStatusAlteradoEvent } from '../../../ordem-de-servico/domain/events/os-status-alterado.event';
+import { StatusOS } from '../../../ordem-de-servico/domain/value-objects/status-os.vo';
 import { CanalNotificacao } from '../../domain/value-objects/canal-notificacao.vo';
 import { TipoNotificacao } from '../../domain/value-objects/tipo-notificacao.vo';
 import { EnviarNotificacaoUseCase } from '../use-cases/enviar-notificacao.use-case';
 import { PUBLIC_BASE_URL } from '../ports/public-base-url';
+
+/**
+ * Transicoes que ja disparam uma notificacao dedicada e mais rica
+ * (OrcamentoProntoEvent / OsFinalizadaEvent). A notificacao generica de
+ * mudanca de status e suprimida para esses status para nao notificar o
+ * cliente duas vezes pela mesma transicao.
+ */
+const STATUS_COM_NOTIFICACAO_DEDICADA: ReadonlySet<StatusOS> = new Set([
+  StatusOS.AGUARDANDO_APROVACAO,
+  StatusOS.FINALIZADA,
+]);
 
 @Injectable()
 export class OrdemDeServicoNotificacaoListener {
@@ -108,6 +120,10 @@ export class OrdemDeServicoNotificacaoListener {
 
   @OnEvent(OsStatusAlteradoEvent.EVENT_NAME)
   async onOsStatusAlterado(event: OsStatusAlteradoEvent): Promise<void> {
+    if (STATUS_COM_NOTIFICACAO_DEDICADA.has(event.statusAtual)) {
+      return;
+    }
+
     try {
       const cliente = await this.clienteRepository.findById(event.clienteId);
       const destinatario = cliente?.email ?? event.clienteId;
