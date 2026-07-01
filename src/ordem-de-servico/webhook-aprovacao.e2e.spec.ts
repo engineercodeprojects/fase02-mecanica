@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import request from 'supertest';
 import * as bcrypt from 'bcrypt';
 import { AppModule } from '../app.module';
@@ -13,11 +14,10 @@ import {
 
 jest.setTimeout(120000);
 
-const WEBHOOK_TOKEN = 'e2e-webhook-secret-token';
-
 describe('Webhook Aprovacao (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
+  let WEBHOOK_TOKEN: string;
 
   const tokens: Record<string, string> = {};
 
@@ -30,7 +30,7 @@ describe('Webhook Aprovacao (e2e)', () => {
     const databaseUrl = await startTestDatabase();
     process.env.DATABASE_URL = databaseUrl;
     process.env.JWT_SECRET = 'test-secret';
-    process.env.WEBHOOK_APPROVAL_TOKEN = WEBHOOK_TOKEN;
+    process.env.WEBHOOK_APPROVAL_TOKEN ??= 'e2e-webhook-secret-token';
 
     const moduleRef: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
@@ -43,6 +43,9 @@ describe('Webhook Aprovacao (e2e)', () => {
     await app.init();
 
     prisma = moduleRef.get<PrismaService>(PrismaService);
+
+    const configService = moduleRef.get<ConfigService>(ConfigService);
+    WEBHOOK_TOKEN = configService.get<string>('WEBHOOK_APPROVAL_TOKEN')!;
 
     await prisma.itemOrdemDeServicoServico.deleteMany();
     await prisma.ordemDeServico.deleteMany();
