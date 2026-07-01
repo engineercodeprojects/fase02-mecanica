@@ -12,6 +12,8 @@ import { PRODUTO_REPOSITORY } from '../produto/domain/produto.repository';
 import { USUARIO_REPOSITORY } from '../usuario/domain/usuario.repository';
 import { OrdemDeServicoController } from './infrastructure/ordem-de-servico.controller';
 import { ClienteOrdemDeServicoController } from './infrastructure/cliente-ordem-de-servico.controller';
+import { WebhookAprovacaoController } from './infrastructure/webhook-aprovacao.controller';
+import { WebhookTokenGuard } from './infrastructure/guards/webhook-token.guard';
 import { PrismaOrdemDeServicoRepository } from './infrastructure/prisma-ordem-de-servico.repository';
 import { ORDEM_DE_SERVICO_REPOSITORY } from './domain/ordem-de-servico.repository';
 import { ORDEM_DE_SERVICO_GATEWAY } from './application/gateways/ordem-de-servico.gateway';
@@ -73,9 +75,10 @@ const USE_CASES = [
     ProdutoModule,
     UsuarioModule,
   ],
-  controllers: [OrdemDeServicoController, ClienteOrdemDeServicoController],
+  controllers: [OrdemDeServicoController, ClienteOrdemDeServicoController, WebhookAprovacaoController],
   providers: [
     ...USE_CASES,
+    WebhookTokenGuard,
     // Persistencia: o adapter Prisma satisfaz a porta de repositorio e o gateway.
     PrismaOrdemDeServicoRepository,
     {
