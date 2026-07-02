@@ -59,27 +59,22 @@ jobs:
     name: Build Docker image
     runs-on: ubuntu-latest
     needs: test
-    outputs:
-      image-tag: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@6524bf65af31da8d2b59c8c14a3ed4239e7da18d # v3
+      - name: Build Docker image with native docker command
+        run: docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
 
-      - name: Build Docker image
-        uses: docker/build-push-action@4a13e500e55cf31b7a5d59a38ab2040ab0f42f56 # v5
-        with:
-          context: .
-          push: false
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-          outputs: type=docker,dest=/tmp/image.tar
+      - name: Save Docker image to tarball
+        run: |
+          mkdir -p /tmp/docker-image
+          docker save ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} -o /tmp/docker-image/image.tar
 
       - name: Upload Docker image artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: docker-image
-          path: /tmp/image.tar
+          path: /tmp/docker-image/image.tar
           retention-days: 1
 
   # ---------------------------------------------------------------------------
@@ -121,14 +116,14 @@ jobs:
         run: kubectl create namespace app || true
 
       - name: Download Docker image
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
         with:
           name: docker-image
-          path: /tmp
+          path: /tmp/docker-image
 
       - name: Load Docker image into Kind
         run: |
-          kind load image-archive /tmp/image.tar --name ci-cluster
+          kind load image-archive /tmp/docker-image/image.tar --name ci-cluster
           echo "Docker image loaded successfully"
 
       - name: Create PostgreSQL secrets
