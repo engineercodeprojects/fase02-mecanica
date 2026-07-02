@@ -15,7 +15,6 @@ env:
   POSTGRES_USER: postgres
   POSTGRES_PASSWORD: postgres
   POSTGRES_DB: mecanica_db
-  DATABASE_URL: postgresql://${{ env.POSTGRES_USER }}:${{ env.POSTGRES_PASSWORD }}@postgres:5432/${{ env.POSTGRES_DB }}
 
 jobs:
   # ---------------------------------------------------------------------------
