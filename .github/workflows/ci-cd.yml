@@ -25,13 +25,13 @@ jobs:
     name: Tests + Coverage (gate 80%)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: "npm"
       - run: npm ci
       - run: npx prisma generate
       - name: Run unit tests with coverage
@@ -46,14 +46,14 @@ jobs:
           fi
           echo "✅ Coverage $COVERAGE% meets gate 80%"
       - name: Upload coverage artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: coverage-lcov
           path: coverage/unit/lcov.info
           retention-days: 7
       - name: Comment PR with coverage
         if: github.event_name == 'pull_request'
-        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca44cf27cfcae  # v7
+        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca44cf27cfcae # v7
         with:
           script: |
             const fs = require('fs');
