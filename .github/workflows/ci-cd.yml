@@ -1,4 +1,4 @@
-name: CI/CD - Build & Test
+name: CI/CD - Build, Test & Deploy
 
 on:
   push:
@@ -13,32 +13,40 @@ env:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # 1. Run automated tests (unit + coverage gate 80%)
+  # Passo 1: Execução dos testes automatizados
   # ---------------------------------------------------------------------------
-  test:
-    name: Tests + Coverage (gate 80%)
+  1-automated-tests:
+    name: "1️⃣ Execução dos Testes Automatizados"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
+
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "20"
           cache: "npm"
-      - run: npm ci
-      - run: npx prisma generate
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
       - name: Run unit tests with coverage
         run: npm run test:unit:cov
+
       - name: Check coverage gate (80%)
         run: |
           COVERAGE=$(grep -oP '(?<=Lines.*?\s)\d+\.\d+' coverage/unit/lcov-report/index.html | head -1)
-          echo "Line coverage: $COVERAGE%"
+          echo "📊 Line coverage: $COVERAGE%"
           if (( $(echo "$COVERAGE < 80" | bc -l) )); then
             echo "❌ Coverage $COVERAGE% is below gate 80%"
             exit 1
           fi
           echo "✅ Coverage $COVERAGE% meets gate 80%"
+
       - name: Upload coverage artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -47,12 +55,12 @@ jobs:
           retention-days: 7
 
   # ---------------------------------------------------------------------------
-  # 2. Build Docker image (multi-stage, optimizado para produção)
+  # Passo 2: Build da aplicação
   # ---------------------------------------------------------------------------
-  build-docker:
-    name: Build Docker image
+  2-build-application:
+    name: "2️⃣ Build da Aplicação"
     runs-on: ubuntu-latest
-    needs: test
+    needs: 1-automated-tests
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
@@ -67,16 +75,52 @@ jobs:
       - name: Generate Prisma client
         run: npx prisma generate
 
-      - name: Build application
+      - name: Build NestJS application
         run: npm run build
 
-      - name: Build Docker image with native docker command
-        run: docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
+      - name: Upload built application
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: app-build
+          path: dist/
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
+  # Passo 3: Build da imagem Docker
+  # ---------------------------------------------------------------------------
+  3-build-docker-image:
+    name: "3️⃣ Build da Imagem Docker"
+    runs-on: ubuntu-latest
+    needs: 2-build-application
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Download built application
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: app-build
+          path: dist/
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install production dependencies
+        run: npm ci --production
+
+      - name: Build Docker image
+        run: |
+          echo "🐳 Building Docker image..."
+          docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
+          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          echo "✅ Docker image built successfully"
 
       - name: Save Docker image to tarball
         run: |
           mkdir -p /tmp/docker-image
           docker save ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} -o /tmp/docker-image/image.tar
+          echo "✅ Docker image saved to artifact"
 
       - name: Upload Docker image artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -86,12 +130,12 @@ jobs:
           retention-days: 1
 
   # ---------------------------------------------------------------------------
-  # 3. Deploy to Kubernetes (Kind cluster)
+  # Passo 4: Deploy do banco de dados
   # ---------------------------------------------------------------------------
-  deploy-k8s:
-    name: Deploy to Kubernetes
+  4-deploy-database:
+    name: "4️⃣ Deploy do Banco de Dados"
     runs-on: ubuntu-latest
-    needs: [test, build-docker]
+    needs: 3-build-docker-image
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
@@ -103,29 +147,12 @@ jobs:
       - name: Setup kubectl
         uses: azure/setup-kubectl@v4
 
-      - name: Verify cluster is ready
-        run: |
-          echo "Cluster info:"
-          kubectl cluster-info
-          echo "Nodes:"
-          kubectl get nodes
-
-      - name: Download Docker image
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: docker-image
-          path: /tmp/docker-image
-
-      - name: Load Docker image into Kind
-        run: |
-          kind load image-archive /tmp/docker-image/image.tar --name ci-cluster
-          echo "✅ Docker image loaded to cluster"
-
       - name: Create namespace
         run: kubectl create namespace mecanica || true
 
-      - name: Deploy database (PostgreSQL)
+      - name: Deploy PostgreSQL database
         run: |
+          echo "🗄️  Deploying PostgreSQL database..."
           kubectl apply -f - -n mecanica <<'EOF'
           apiVersion: v1
           kind: ConfigMap
@@ -175,15 +202,263 @@ jobs:
               targetPort: 5432
             type: ClusterIP
           EOF
-          echo "✅ PostgreSQL deployed"
+          echo "✅ PostgreSQL deployed successfully"
 
       - name: Wait for PostgreSQL to be ready
+        run: |
+          echo "⏳ Waiting for PostgreSQL to be ready..."
+          kubectl rollout status deployment/postgres -n mecanica --timeout=2m || true
+          sleep 5
+
+  # ---------------------------------------------------------------------------
+  # Passo 5: Deploy no cluster Kubernetes
+  # ---------------------------------------------------------------------------
+  5-deploy-kubernetes:
+    name: "5️⃣ Deploy no Cluster Kubernetes"
+    runs-on: ubuntu-latest
+    needs: [4-deploy-database, 3-build-docker-image]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Create Kind cluster
+        uses: helm/kind-action@v1.11.0
+        with:
+          cluster_name: ci-cluster
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Create namespace
+        run: kubectl create namespace mecanica || true
+
+      - name: Deploy PostgreSQL database (prerequisite)
+        run: |
+          echo "🗄️  Re-deploying PostgreSQL..."
+          kubectl apply -f - -n mecanica <<'EOF'
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: postgres-config
+          data:
+            POSTGRES_DB: mecanica_db
+            POSTGRES_USER: postgres
+            POSTGRES_PASSWORD: "postgres"
+          ---
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: postgres
+            labels:
+              app: postgres
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: postgres
+            template:
+              metadata:
+                labels:
+                  app: postgres
+              spec:
+                containers:
+                - name: postgres
+                  image: postgres:15-alpine
+                  ports:
+                  - containerPort: 5432
+                  envFrom:
+                  - configMapRef:
+                      name: postgres-config
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: postgres
+            labels:
+              app: postgres
+          spec:
+            selector:
+              app: postgres
+            ports:
+            - port: 5432
+              targetPort: 5432
+            type: ClusterIP
+          EOF
+          echo "✅ PostgreSQL ready"
+
+      - name: Wait for PostgreSQL
+        run: |
+          echo "⏳ Waiting for PostgreSQL..."
+          kubectl rollout status deployment/postgres -n mecanica --timeout=2m || true
+          sleep 5
+
+      - name: Download Docker image
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: docker-image
+          path: /tmp/docker-image
+
+      - name: Load Docker image into Kind cluster
+        run: |
+          echo "📦 Loading Docker image into Kind cluster..."
+          kind load image-archive /tmp/docker-image/image.tar --name ci-cluster
+          echo "✅ Docker image loaded successfully"
+
+      - name: Deploy application to Kubernetes
+        run: |
+          echo "🚀 Deploying application to Kubernetes..."
+          kubectl apply -f - -n mecanica <<'EOF'
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: app-secrets
+          type: Opaque
+          stringData:
+            DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/mecanica_db"
+            JWT_SECRET: "ci-test-secret"
+            JWT_EXPIRES_IN: "86400"
+          ---
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: mecanica-app
+            labels:
+              app: mecanica-app
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: mecanica-app
+            template:
+              metadata:
+                labels:
+                  app: mecanica-app
+              spec:
+                containers:
+                - name: app
+                  image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+                  imagePullPolicy: IfNotPresent
+                  ports:
+                  - containerPort: 3000
+                  env:
+                  - name: NODE_ENV
+                    value: "production"
+                  - name: DATABASE_URL
+                    valueFrom:
+                      secretKeyRef:
+                        name: app-secrets
+                        key: DATABASE_URL
+                  - name: JWT_SECRET
+                    valueFrom:
+                      secretKeyRef:
+                        name: app-secrets
+                        key: JWT_SECRET
+                  - name: JWT_EXPIRES_IN
+                    valueFrom:
+                      secretKeyRef:
+                        name: app-secrets
+                        key: JWT_EXPIRES_IN
+          EOF
+          echo "✅ Application deployed successfully"
+
+      - name: Wait for application
+        run: |
+          echo "⏳ Waiting for application to be ready..."
+          kubectl rollout status deployment/mecanica-app -n mecanica --timeout=2m || true
+          sleep 5
+
+  # ---------------------------------------------------------------------------
+  # Passo 6: Aplicação dos manifestos YAML no cluster
+  # ---------------------------------------------------------------------------
+  6-apply-manifests:
+    name: "6️⃣ Aplicação dos Manifestos YAML"
+    runs-on: ubuntu-latest
+    needs: 5-deploy-kubernetes
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Create Kind cluster
+        uses: helm/kind-action@v1.11.0
+        with:
+          cluster_name: ci-cluster
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Create namespace
+        run: kubectl create namespace mecanica || true
+
+      - name: Deploy database infrastructure
+        run: |
+          echo "📋 Applying database manifests..."
+          kubectl apply -f - -n mecanica <<'EOF'
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: postgres-config
+          data:
+            POSTGRES_DB: mecanica_db
+            POSTGRES_USER: postgres
+            POSTGRES_PASSWORD: "postgres"
+          ---
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: postgres
+            labels:
+              app: postgres
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: postgres
+            template:
+              metadata:
+                labels:
+                  app: postgres
+              spec:
+                containers:
+                - name: postgres
+                  image: postgres:15-alpine
+                  ports:
+                  - containerPort: 5432
+                  envFrom:
+                  - configMapRef:
+                      name: postgres-config
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: postgres
+            labels:
+              app: postgres
+          spec:
+            selector:
+              app: postgres
+            ports:
+            - port: 5432
+              targetPort: 5432
+            type: ClusterIP
+          EOF
+          echo "✅ Database manifests applied"
+
+      - name: Wait for database
         run: |
           kubectl rollout status deployment/postgres -n mecanica --timeout=2m || true
           sleep 5
 
-      - name: Deploy application
+      - name: Download Docker image
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: docker-image
+          path: /tmp/docker-image
+
+      - name: Load Docker image into Kind
         run: |
+          kind load image-archive /tmp/docker-image/image.tar --name ci-cluster
+
+      - name: Apply application and infrastructure manifests
+        run: |
+          echo "📦 Applying application manifests (Deployment, Service, HPA)..."
           kubectl apply -f - -n mecanica <<'EOF'
           apiVersion: v1
           kind: Secret
@@ -270,49 +545,69 @@ jobs:
                   type: Utilization
                   averageUtilization: 70
           EOF
-          echo "✅ Application deployed with HPA"
+          echo "✅ All manifests applied successfully"
 
-      - name: Wait for application to be ready
+      - name: Verify all resources
         run: |
-          kubectl rollout status deployment/mecanica-app -n mecanica --timeout=2m || true
-          sleep 5
-
-      - name: Check deployment status
-        run: |
-          echo "=== Deployments ==="
+          echo "✅ Verifying Kubernetes resources..."
+          echo ""
+          echo "📦 Deployments:"
           kubectl get deployments -n mecanica
           echo ""
-          echo "=== Pods ==="
+          echo "🐳 Pods:"
           kubectl get pods -n mecanica
           echo ""
-          echo "=== Services ==="
+          echo "⚙️  Services:"
           kubectl get svc -n mecanica
           echo ""
-          echo "=== HPA ==="
+          echo "📊 HPA (Horizontal Pod Autoscaler):"
           kubectl get hpa -n mecanica
           echo ""
-          echo "✅ Kubernetes deployment verified successfully"
+          echo "✅ All Kubernetes resources verified successfully"
 
   # ---------------------------------------------------------------------------
-  # 4. Pipeline status summary
+  # Resumo: Pipeline Status
   # ---------------------------------------------------------------------------
-  pipeline-status:
-    name: Pipeline Status
+  pipeline-summary:
+    name: "✅ Resumo da Pipeline CI/CD"
     runs-on: ubuntu-latest
-    needs: [test, build-docker, deploy-k8s]
+    needs:
+      [
+        1-automated-tests,
+        2-build-application,
+        3-build-docker-image,
+        4-deploy-database,
+        5-deploy-kubernetes,
+        6-apply-manifests,
+      ]
     if: always()
     steps:
-      - name: Check pipeline status
+      - name: Display CI/CD Pipeline Summary
         run: |
-          echo "=== CI/CD Pipeline Summary ==="
-          echo "✅ Tests: ${{ needs.test.result }}"
-          echo "✅ Build Docker: ${{ needs.build-docker.result }}"
-          echo "✅ Deploy K8S: ${{ needs.deploy-k8s.result }}"
+          echo "╔════════════════════════════════════════════════════════════════╗"
+          echo "║          CI/CD Pipeline - All 6 Steps Completed               ║"
+          echo "╚════════════════════════════════════════════════════════════════╝"
           echo ""
-          if [ "${{ needs.test.result }}" = "failure" ] || \
-             [ "${{ needs.build-docker.result }}" = "failure" ] || \
-             [ "${{ needs.deploy-k8s.result }}" = "failure" ]; then
-            echo "❌ Pipeline FAILED"
+          echo "1️⃣  Execução dos Testes Automatizados: ${{ needs.1-automated-tests.result }}"
+          echo "2️⃣  Build da Aplicação: ${{ needs.2-build-application.result }}"
+          echo "3️⃣  Build da Imagem Docker: ${{ needs.3-build-docker-image.result }}"
+          echo "4️⃣  Deploy do Banco de Dados: ${{ needs.4-deploy-database.result }}"
+          echo "5️⃣  Deploy no Cluster Kubernetes: ${{ needs.5-deploy-kubernetes.result }}"
+          echo "6️⃣  Aplicação dos Manifestos YAML: ${{ needs.6-apply-manifests.result }}"
+          echo ""
+          echo "╔════════════════════════════════════════════════════════════════╗"
+          echo ""
+
+          if [ "${{ needs.1-automated-tests.result }}" = "failure" ] || \
+             [ "${{ needs.2-build-application.result }}" = "failure" ] || \
+             [ "${{ needs.3-build-docker-image.result }}" = "failure" ] || \
+             [ "${{ needs.4-deploy-database.result }}" = "failure" ] || \
+             [ "${{ needs.5-deploy-kubernetes.result }}" = "failure" ] || \
+             [ "${{ needs.6-apply-manifests.result }}" = "failure" ]; then
+            echo "❌ Pipeline FALHOU em um ou mais passos"
+            echo "╚════════════════════════════════════════════════════════════════╝"
             exit 1
           fi
-          echo "✅ All CI/CD steps completed successfully!"
+
+          echo "✅ Todos os 6 passos da CI/CD executaram com sucesso!"
+          echo "╚════════════════════════════════════════════════════════════════╝"
