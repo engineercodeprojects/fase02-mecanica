@@ -50,19 +50,7 @@ jobs:
           name: coverage-lcov
           path: coverage/unit/lcov.info
           retention-days: 7
-      - name: Comment PR with coverage
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca44cf27cfcae # v7
-        with:
-          script: |
-            const fs = require('fs');
-            const coverage = fs.readFileSync('coverage/unit/lcov.info', 'utf8');
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: '✅ Tests passed - Coverage gate 80% validated'
-            });
+
 
   # ---------------------------------------------------------------------------
   # 2. Build Docker image (multi-stage, optimizado para produção)
