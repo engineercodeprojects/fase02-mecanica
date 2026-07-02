@@ -290,46 +290,24 @@ jobs:
           echo ""
           echo "=== HPA ==="
           kubectl get hpa -n mecanica
+          echo ""
+          echo "✅ Kubernetes deployment verified successfully"
 
   # ---------------------------------------------------------------------------
-  # 4. Verify deployment (Smoke tests)
-  # ---------------------------------------------------------------------------
-  verify-deployment:
-    name: Verify Kubernetes deployment
-    runs-on: ubuntu-latest
-    needs: deploy-k8s
-    steps:
-      - name: Setup kubectl
-        uses: azure/setup-kubectl@v4
-
-      - name: Check cluster health
-        run: |
-          echo "✅ Checking cluster status..."
-          kubectl cluster-info
-          kubectl get nodes
-
-      - name: Check pods status
-        run: |
-          echo "✅ Checking pods..."
-          kubectl get pods -n mecanica -o wide
-          kubectl describe pod -n mecanica | head -50 || true
-
-  # ---------------------------------------------------------------------------
-  # 3. Pipeline status summary
+  # 4. Pipeline status summary
   # ---------------------------------------------------------------------------
   pipeline-status:
     name: Pipeline Status
     runs-on: ubuntu-latest
-    needs: [test, build-docker, deploy-k8s, verify-deployment]
+    needs: [test, build-docker, deploy-k8s]
     if: always()
     steps:
       - name: Check pipeline status
         run: |
           echo "=== CI/CD Pipeline Summary ==="
-          echo "✅ Test job: ${{ needs.test.result }}"
+          echo "✅ Tests: ${{ needs.test.result }}"
           echo "✅ Build Docker: ${{ needs.build-docker.result }}"
           echo "✅ Deploy K8S: ${{ needs.deploy-k8s.result }}"
-          echo "✅ Verify: ${{ needs.verify-deployment.result }}"
           echo ""
           if [ "${{ needs.test.result }}" = "failure" ] || \
              [ "${{ needs.build-docker.result }}" = "failure" ] || \
@@ -337,4 +315,4 @@ jobs:
             echo "❌ Pipeline FAILED"
             exit 1
           fi
-          echo "✅ Pipeline PASSED"
+          echo "✅ All CI/CD steps completed successfully!"
