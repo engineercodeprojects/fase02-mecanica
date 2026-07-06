@@ -93,9 +93,13 @@ describe("PrismaOrdemDeServicoRepository (integration)", () => {
     await stopTestDatabase();
   });
 
-  beforeEach(async () => {
+  const clearOrdens = async () => {
     await prisma.itemOrdemDeServicoServico.deleteMany();
     await prisma.ordemDeServico.deleteMany();
+  };
+
+  beforeEach(async () => {
+    await clearOrdens();
   });
 
   const buildOs = (
@@ -267,6 +271,8 @@ describe("PrismaOrdemDeServicoRepository (integration)", () => {
     });
 
     it("should include FINALIZADA and ENTREGUE when incluirEncerradas is true", async () => {
+      await clearOrdens();
+
       // Create OS with different statuses
       const os1 = await repository.create(buildOs());
       const os2 = await repository.create(buildOs());
@@ -297,6 +303,8 @@ describe("PrismaOrdemDeServicoRepository (integration)", () => {
     });
 
     it("should order by status priority within page", async () => {
+      await clearOrdens();
+
       // Create OS with different statuses in specific order
       const osRecebida = await repository.create(buildOs());
 

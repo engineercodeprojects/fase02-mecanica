@@ -23,6 +23,7 @@ import {
   ApiBadRequestResponse,
   ApiUnauthorizedResponse,
 } from "@nestjs/swagger";
+import { AuditLogService } from "../application/audit-log.service";
 import { CreateOrdemDeServicoDto } from "./dto/create-ordem-de-servico.dto";
 import { CompletarDiagnosticoDto } from "./dto/completar-diagnostico.dto";
 import { QueryOrdemDeServicoDto } from "./dto/query-ordem-de-servico.dto";
@@ -82,6 +83,7 @@ export class OrdemDeServicoController {
     private readonly adicionarProdutoUseCase: AdicionarProdutoAoServicoUseCase,
     private readonly removerProdutoUseCase: RemoverProdutoDoServicoUseCase,
     private readonly deletarOrdemDeServicoUseCase: DeletarOrdemDeServicoUseCase,
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   @Post()
@@ -152,6 +154,25 @@ export class OrdemDeServicoController {
       dataInicio: query.dataInicio,
       dataFim: query.dataFim,
     });
+  }
+
+  @Get(":id/audit-log")
+  @Roles(Role.ADMIN, Role.ATENDENTE)
+  @ApiOperation({
+    summary: "Listar audit log da OS (transicoes e acoes registradas)",
+  })
+  @ApiOkResponse({ description: "Log paginado em ordem cronologica" })
+  async findAuditLog(@Param("id", ParseUUIDPipe) id: string) {
+    const logs = await this.auditLogService.findByOrdemDeServicoId(id);
+    return logs.map((log) => ({
+      id: log.id,
+      acao: log.acao,
+      statusAnterior: log.statusAnterior,
+      statusNovo: log.statusNovo,
+      usuarioId: log.usuarioId,
+      metadata: log.metadata,
+      createdAt: log.createdAt,
+    }));
   }
 
   @Get(":id")

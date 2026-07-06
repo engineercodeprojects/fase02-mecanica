@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { validateEnv } from './config/env.validation';
 import { HealthModule } from './health/health.module';
@@ -15,6 +15,7 @@ import { VeiculoModule } from './veiculo/veiculo.module';
 import { OrdemDeServicoModule } from './ordem-de-servico/ordem-de-servico.module';
 import { UsuarioModule } from './usuario/usuario.module';
 import { NotificacaoModule } from './notificacao/notificacao.module';
+import { CorrelationIdInterceptor } from './shared/infrastructure/correlation-id.interceptor';
 
 @Module({
   imports: [
@@ -39,6 +40,9 @@ import { NotificacaoModule } from './notificacao/notificacao.module';
     OrdemDeServicoModule,
     NotificacaoModule,
   ],
-  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
+  providers: [
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_INTERCEPTOR, useClass: CorrelationIdInterceptor },
+  ],
 })
 export class AppModule {}
