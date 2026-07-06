@@ -1,29 +1,27 @@
-import { Injectable } from '@nestjs/common';
-import { Prisma } from '../../generated/prisma/client';
-import { PrismaService } from '../../prisma/prisma.service';
+import { Injectable } from "@nestjs/common";
+import { Prisma } from "../../generated/prisma/client";
+import { PrismaService } from "../../prisma/prisma.service";
 import {
   OrdemDeServicoRepository,
   FindAllParams,
   PaginatedResult,
   TempoMedioFilters,
   TempoMedioExecucaoResult,
-} from '../domain/ordem-de-servico.repository';
-import { OrdemDeServico } from '../domain/ordem-de-servico.entity';
-import { StatusOS } from '../domain/value-objects/status-os.vo';
+} from "../domain/ordem-de-servico.repository";
+import { OrdemDeServico } from "../domain/ordem-de-servico.entity";
+import { StatusOS } from "../domain/value-objects/status-os.vo";
 import {
   ItemServicoOS,
   StatusExecucaoItem,
-} from '../domain/value-objects/item-servico-os.vo';
-import { ItemProdutoOS } from '../domain/value-objects/item-produto-os.vo';
+} from "../domain/value-objects/item-servico-os.vo";
+import { ItemProdutoOS } from "../domain/value-objects/item-produto-os.vo";
 
 const INCLUDE_ITENS = {
   itensServico: { include: { produtos: true } },
 } as const;
 
 @Injectable()
-export class PrismaOrdemDeServicoRepository
-  implements OrdemDeServicoRepository
-{
+export class PrismaOrdemDeServicoRepository implements OrdemDeServicoRepository {
   constructor(private prisma: PrismaService) {}
 
   async create(os: OrdemDeServico): Promise<OrdemDeServico> {
@@ -58,21 +56,52 @@ export class PrismaOrdemDeServicoRepository
     const where: any = {};
     if (params.clienteId) where.clienteId = params.clienteId;
     if (params.status) where.status = params.status;
-    if (params.numero) where.numero = { contains: params.numero, mode: 'insensitive' };
+    if (params.numero)
+      where.numero = { contains: params.numero, mode: "insensitive" };
 
+    // Excluir OS com status FINALIZADA ou ENTREGUE por padrão
+    if (!params.incluirEncerradas) {
+      where.NOT = [{ status: "FINALIZADA" }, { status: "ENTREGUE" }];
+    }
+
+    // Buscar dados sem ordenação inicial para aplicar lógica customizada
     const [data, total] = await Promise.all([
       this.prisma.ordemDeServico.findMany({
         where,
         skip,
         take: params.limit ?? 10,
-        orderBy: { createdAt: 'desc' },
         include: INCLUDE_ITENS,
       }),
       this.prisma.ordemDeServico.count({ where }),
     ]);
 
+    // Ordenação customizada por status:
+    // EM_EXECUCAO > AGUARDANDO_APROVACAO > EM_DIAGNOSTICO > RECEBIDA
+    // Dentro do mesmo status, mais antigas primeiro (createdAt asc)
+    const statusPriority: { [key: string]: number } = {
+      EM_EXECUCAO: 0,
+      AGUARDANDO_APROVACAO: 1,
+      EM_DIAGNOSTICO: 2,
+      RECEBIDA: 3,
+      CANCELADA: 4,
+      FINALIZADA: 5,
+      ENTREGUE: 6,
+    };
+
+    const sortedData = data.sort((a, b) => {
+      const priorityA = statusPriority[a.status] ?? 999;
+      const priorityB = statusPriority[b.status] ?? 999;
+
+      if (priorityA !== priorityB) {
+        return priorityA - priorityB;
+      }
+
+      // Se mesmo status, ordenar por createdAt (mais antigas primeiro)
+      return a.createdAt.getTime() - b.createdAt.getTime();
+    });
+
     return {
-      data: data.map((d) => this.toDomain(d)),
+      data: sortedData.map((d) => this.toDomain(d)),
       total,
       page: params.page ?? 1,
       limit: params.limit ?? 10,
@@ -166,7 +195,7 @@ export class PrismaOrdemDeServicoRepository
     if (filters.dataFim) {
       conditions.push(Prisma.sql`i.fim_execucao <= ${filters.dataFim}`);
     }
-    const whereSql = Prisma.sql`WHERE ${Prisma.join(conditions, ' AND ')}`;
+    const whereSql = Prisma.sql`WHERE ${Prisma.join(conditions, " AND ")}`;
 
     const rows = await this.prisma.$queryRaw<
       {
@@ -216,9 +245,7 @@ export class PrismaOrdemDeServicoRepository
     return {
       totalServicosConcluidos,
       tempoMedioGeralMinutos,
-      tempoMedioGeralHoras: Number(
-        (tempoMedioGeralMinutos / 60).toFixed(2),
-      ),
+      tempoMedioGeralHoras: Number((tempoMedioGeralMinutos / 60).toFixed(2)),
       porServico,
     };
   }
@@ -238,7 +265,7 @@ export class PrismaOrdemDeServicoRepository
           i.servicoId,
           i.quantidade,
           Number(i.precoUnitario),
-          (i.statusExecucao ?? 'PENDENTE') as StatusExecucaoItem,
+          (i.statusExecucao ?? "PENDENTE") as StatusExecucaoItem,
           i.inicioExecucao ?? null,
           i.fimExecucao ?? null,
           i.horasTrabalhadas ?? null,
