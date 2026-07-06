@@ -28,6 +28,7 @@ services:
       PORT: '${PORT:-3000}'
       JWT_SECRET: '${JWT_SECRET:?JWT_SECRET is required — set it in .env or your shell env}'
       JWT_EXPIRES_IN: '${JWT_EXPIRES_IN:-1h}'
+      WEBHOOK_APPROVAL_TOKEN: '${WEBHOOK_APPROVAL_TOKEN:-}'
       PUBLIC_BASE_URL: '${PUBLIC_BASE_URL:-http://localhost:3000}'
       WEB_ORIGINS: '${WEB_ORIGINS:-http://localhost:5173,http://localhost:5174,http://localhost:8080,http://localhost:8081}'
     depends_on:

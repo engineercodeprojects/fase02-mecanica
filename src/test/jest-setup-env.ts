@@ -9,4 +9,5 @@
  * Usa `??=` para nao sobrescrever valores reais ja definidos pelo ambiente.
  */
 process.env.JWT_SECRET ??= 'test-jwt-secret-ci-0123456789abcdef-strong';
+process.env.WEBHOOK_APPROVAL_TOKEN ??= 'e2e-webhook-secret-token';
 process.env.NODE_ENV ??= 'test';
