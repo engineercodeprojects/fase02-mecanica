@@ -63,6 +63,11 @@ cp .env.example .env
 | `PORT` | Porta da API | `3000` |
 | `JWT_SECRET` | **Obrigatória.** Chave secreta do JWT | — (a app falha em iniciar sem esta variável) |
 | `JWT_EXPIRES_IN` | Expiração do token | `1h` |
+| `PUBLIC_BASE_URL` | URL pública usada nos links enviados em notificações | `http://localhost:3000` |
+| `NOTIFICATION_PROVIDER` | Adapter de notificação: `mock` ou `webhook`. Sem valor, usa `mock` em desenvolvimento e `webhook` em produção | `mock` em dev, `webhook` em prod |
+| `NOTIFICATION_WEBHOOK_URL` | URL de destino do POST outbound de notificação. Para demo, use uma URL de `https://webhook.site/` ou RequestBin | — |
+| `NOTIFICATION_WEBHOOK_SECRET` | Segredo usado para gerar o header `X-Signature: sha256=<hmac>` com HMAC-SHA256 do body | — |
+| `NOTIFICATION_WEBHOOK_TIMEOUT_MS` | Timeout do POST outbound | `5000` |
 
 > **Importante:** `JWT_SECRET` é obrigatória. Antes de subir os containers, copie `.env.example` para `.env` ou defina a variável no seu shell. Exemplo:
 >
@@ -70,6 +75,22 @@ cp .env.example .env
 > cp .env.example .env
 > # edite .env e coloque um valor forte em JWT_SECRET
 > ```
+
+### Notificação por webhook outbound
+
+Para demonstrar notificações sem infraestrutura própria de e-mail/SMS/push, a aplicação pode publicar mudanças de status da OS em um webhook externo.
+
+1. Abra `https://webhook.site/` ou um RequestBin e copie a URL gerada.
+2. Configure o `.env`:
+
+```bash
+NOTIFICATION_PROVIDER=webhook
+NOTIFICATION_WEBHOOK_URL=https://webhook.site/<token-gerado>
+NOTIFICATION_WEBHOOK_SECRET=segredo-usado-no-video
+NOTIFICATION_WEBHOOK_TIMEOUT_MS=5000
+```
+
+Quando a OS mudar de status, a API envia `POST` com `Content-Type: application/json` e `X-Signature: sha256=<hmac>`. O body contém `ordemId`, `clienteId`, `statusAnterior`, `statusAtual`, `timestamp` e `tipoNotificacao`. Falhas de entrega, timeout e respostas 4xx/5xx são registradas em log e não bloqueiam o fluxo principal da OS.
 
 ---
 

@@ -215,6 +215,7 @@ model Notificacao {
 enum TipoNotificacao {
   ORCAMENTO_PRONTO
   OS_FINALIZADA
+  STATUS_OS_ALTERADO
 }
 
 enum CanalNotificacao {
