@@ -39,5 +39,8 @@ Thumbs.db
 *.swp
 *.swo
 
+# Claude Code local overrides (per-developer, nao versionar)
+.claude/settings.local.json
+
 # Docker volumes / local data
 postgres-data/

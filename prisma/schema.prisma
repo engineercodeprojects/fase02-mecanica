@@ -57,9 +57,36 @@ model Produto {
   createdAt            DateTime @default(now()) @map("created_at")
   updatedAt            DateTime @updatedAt @map("updated_at")
 
-  itensOrdemDeServico ItemOrdemDeServicoProduto[]
+  movimentacoes        MovimentacaoEstoque[]
+  itensOrdemDeServico  ItemOrdemDeServicoProduto[]
 
   @@map("produto")
+}
+
+model MovimentacaoEstoque {
+  id                String                  @id @default(uuid())
+  produtoId         String                  @map("produto_id")
+  tipo              TipoMovimentacaoEstoque
+  quantidade        Int
+  estoqueResultante Int                     @map("estoque_resultante")
+  ordemDeServicoId  String?                 @map("ordem_de_servico_id")
+  motivo            String?
+  usuarioId         String?                 @map("usuario_id")
+  createdAt         DateTime                @default(now()) @map("created_at")
+
+  produto Produto @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+
+  @@index([produtoId, createdAt])
+  @@index([ordemDeServicoId])
+  @@map("movimentacao_estoque")
+}
+
+enum TipoMovimentacaoEstoque {
+  ENTRADA
+  SAIDA
+  RESERVA
+  ESTORNO_RESERVA
+  BAIXA
 }
 
 model Cliente {
@@ -110,9 +137,8 @@ model OrdemDeServico {
   veiculo   Veiculo  @relation(fields: [veiculoId], references: [id], onDelete: Cascade)
   usuario   Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
 
-  itensServico  ItemOrdemDeServicoServico[]
-  itensProduto   ItemOrdemDeServicoProduto[]
-  auditLogs     OrdemDeServicoAuditLog[]
+  itensServico ItemOrdemDeServicoServico[]
+  auditLogs    OrdemDeServicoAuditLog[]
 
   @@map("ordem_de_servico")
 }
@@ -131,23 +157,24 @@ model ItemOrdemDeServicoServico {
 
   ordemDeServico OrdemDeServico @relation(fields: [ordemDeServicoId], references: [id], onDelete: Cascade)
   servico        Servico        @relation(fields: [servicoId], references: [id])
+  produtos       ItemOrdemDeServicoProduto[]
 
   @@unique([ordemDeServicoId, servicoId])
   @@map("item_ordem_de_servico_servico")
 }
 
 model ItemOrdemDeServicoProduto {
-  id               String   @id @default(uuid())
-  ordemDeServicoId String   @map("ordem_de_servico_id")
-  produtoId        String   @map("produto_id")
-  quantidade       Int
-  precoUnitario    Decimal  @map("preco_unitario")
-  createdAt        DateTime @default(now()) @map("created_at")
+  id                          String   @id @default(uuid())
+  itemOrdemDeServicoServicoId String   @map("item_ordem_de_servico_servico_id")
+  produtoId                   String   @map("produto_id")
+  quantidade                  Int
+  precoUnitario               Decimal  @map("preco_unitario")
+  createdAt                   DateTime @default(now()) @map("created_at")
 
-  ordemDeServico OrdemDeServico @relation(fields: [ordemDeServicoId], references: [id], onDelete: Cascade)
-  produto        Produto        @relation(fields: [produtoId], references: [id])
+  itemOrdemDeServicoServico ItemOrdemDeServicoServico @relation(fields: [itemOrdemDeServicoServicoId], references: [id], onDelete: Cascade)
+  produto                   Produto                   @relation(fields: [produtoId], references: [id])
 
-  @@unique([ordemDeServicoId, produtoId])
+  @@unique([itemOrdemDeServicoServicoId, produtoId])
   @@map("item_ordem_de_servico_produto")
 }
 
@@ -205,6 +232,7 @@ model Notificacao {
 enum TipoNotificacao {
   ORCAMENTO_PRONTO
   OS_FINALIZADA
+  STATUS_OS_ALTERADO
 }
 
 enum CanalNotificacao {

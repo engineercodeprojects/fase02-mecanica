@@ -1,4 +1,4 @@
-import { DomainError } from '../domain-error';
+import { DomainError, DomainErrorKind } from '../domain-error';
 
 /**
  * Lancado quando um recurso e acessado por um usuario que nao
@@ -7,6 +7,8 @@ import { DomainError } from '../domain-error';
  * Mapeado para HTTP 403.
  */
 export class NotOwnedByUserError extends DomainError {
+  readonly kind = DomainErrorKind.FORBIDDEN;
+
   constructor(
     public readonly resource: string,
     public readonly identifier: string,

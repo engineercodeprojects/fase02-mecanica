@@ -5,9 +5,11 @@ import { ClientesListPage } from '@/pages/clientes/list';
 import { VeiculosListPage } from '@/pages/veiculos/list';
 import { ServicosListPage } from '@/pages/servicos/list';
 import { ProdutosListPage } from '@/pages/produtos/list';
+import { ProdutoMovimentacoesPage } from '@/pages/produtos/movimentacoes';
 import {
   OrdensServicoListPage,
   OrdemServicoDetailPage,
+  OrdensServicoMetricasPage,
 } from '@/pages/ordens-servico';
 import { NotificacoesListPage } from '@/pages/notificacoes/list';
 import { UsuariosListPage } from '@/pages/usuarios/list';
@@ -62,10 +64,26 @@ export function App() {
             }
           />
           <Route
+            path="produtos/:id/movimentacoes"
+            element={
+              <RequireAuth roles={['ADMIN', 'ATENDENTE', 'ESTOQUISTA']}>
+                <ProdutoMovimentacoesPage />
+              </RequireAuth>
+            }
+          />
+          <Route
             path="ordens-servico"
             element={
               <RequireAuth roles={['ADMIN', 'ATENDENTE', 'MECANICO']}>
                 <OrdensServicoListPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="ordens-servico/metricas"
+            element={
+              <RequireAuth roles={['ADMIN', 'ATENDENTE']}>
+                <OrdensServicoMetricasPage />
               </RequireAuth>
             }
           />

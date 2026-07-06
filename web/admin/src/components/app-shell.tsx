@@ -13,6 +13,7 @@ interface MenuItem {
 const items: MenuItem[] = [
   { to: '/', label: 'Dashboard', roles: ['ADMIN', 'ATENDENTE', 'MECANICO', 'ESTOQUISTA'] },
   { to: '/ordens-servico', label: 'Ordens de Servico', roles: ['ADMIN', 'ATENDENTE', 'MECANICO'] },
+  { to: '/ordens-servico/metricas', label: 'Metricas (tempo medio)', roles: ['ADMIN', 'ATENDENTE'] },
   { to: '/clientes', label: 'Clientes', roles: ['ADMIN', 'ATENDENTE'] },
   { to: '/veiculos', label: 'Veiculos', roles: ['ADMIN', 'ATENDENTE'] },
   { to: '/servicos', label: 'Servicos', roles: ['ADMIN'] },

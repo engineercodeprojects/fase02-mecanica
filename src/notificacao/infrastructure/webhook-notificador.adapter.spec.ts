@@ -1,0 +1,106 @@
+import { createHmac } from 'crypto';
+import { ConfigService } from '@nestjs/config';
+import { CanalNotificacao } from '../domain/value-objects/canal-notificacao.vo';
+import { WebhookNotificador } from './webhook-notificador.adapter';
+
+describe('WebhookNotificador', () => {
+  const originalFetch = global.fetch;
+  let fetchMock: jest.Mock;
+
+  const mensagem = {
+    destinatario: 'cliente@email.com',
+    assunto: 'Status alterado',
+    corpo: 'Sua OS mudou de status',
+    contexto: {
+      ordemId: 'os-1',
+      clienteId: 'cliente-1',
+      statusAnterior: 'EM_EXECUCAO',
+      statusAtual: 'FINALIZADA',
+      timestamp: '2026-06-25T10:00:00.000Z',
+      tipoNotificacao: 'STATUS_OS_ALTERADO',
+    },
+  };
+
+  function makeAdapter(timeoutMs = '5000'): WebhookNotificador {
+    const config = {
+      get: jest.fn((key: string, defaultValue?: string) => {
+        const values: Record<string, string> = {
+          NOTIFICATION_WEBHOOK_URL: 'https://webhook.site/test-token',
+          NOTIFICATION_WEBHOOK_SECRET: 'super-secret',
+          NOTIFICATION_WEBHOOK_TIMEOUT_MS: timeoutMs,
+        };
+        return values[key] ?? defaultValue;
+      }),
+    } as unknown as ConfigService;
+
+    return new WebhookNotificador(config);
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    fetchMock = jest.fn();
+    global.fetch = fetchMock as unknown as typeof fetch;
+  });
+
+  afterAll(() => {
+    global.fetch = originalFetch;
+  });
+
+  it('envia POST com body esperado e assinatura HMAC', async () => {
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 204 });
+    const adapter = makeAdapter();
+
+    await adapter.enviar(mensagem);
+
+    expect(adapter.canal).toBe(CanalNotificacao.EMAIL);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0];
+    const body = init.body as string;
+    const signature = createHmac('sha256', 'super-secret')
+      .update(body)
+      .digest('hex');
+
+    expect(url).toBe('https://webhook.site/test-token');
+    expect(init.method).toBe('POST');
+    expect(init.headers).toEqual({
+      'Content-Type': 'application/json',
+      'X-Signature': `sha256=${signature}`,
+    });
+    expect(JSON.parse(body)).toEqual({
+      ordemId: 'os-1',
+      clienteId: 'cliente-1',
+      statusAnterior: 'EM_EXECUCAO',
+      statusAtual: 'FINALIZADA',
+      timestamp: '2026-06-25T10:00:00.000Z',
+      tipoNotificacao: 'STATUS_OS_ALTERADO',
+    });
+  });
+
+  it('aplica timeout e tenta uma vez adicional', async () => {
+    fetchMock.mockImplementation((_url: string, init: RequestInit) => {
+      return new Promise((_resolve, reject) => {
+        init.signal?.addEventListener('abort', () => {
+          const error = new Error('aborted');
+          error.name = 'AbortError';
+          reject(error);
+        });
+      });
+    });
+    const adapter = makeAdapter('1');
+
+    await expect(adapter.enviar(mensagem)).rejects.toThrow(
+      'Timeout ao publicar webhook apos 1ms',
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('trata status 5xx como falha e tenta uma vez adicional', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 500 });
+    const adapter = makeAdapter();
+
+    await expect(adapter.enviar(mensagem)).rejects.toThrow(
+      'Webhook retornou status 500',
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});

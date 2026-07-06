@@ -8,6 +8,7 @@ import { DomainEvent } from '../domain-event';
  */
 export class OrcamentoProntoEvent extends DomainEvent {
   static readonly EVENT_NAME = 'os.orcamento-pronto';
+  readonly eventName = OrcamentoProntoEvent.EVENT_NAME;
 
   constructor(
     public readonly ordemDeServicoId: string,

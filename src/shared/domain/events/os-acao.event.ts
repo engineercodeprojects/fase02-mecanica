@@ -14,6 +14,7 @@ import { DomainEvent } from '../domain-event';
  */
 export class OsAcaoEvent extends DomainEvent {
   static readonly EVENT_NAME = 'os.acao';
+  readonly eventName = OsAcaoEvent.EVENT_NAME;
 
   constructor(
     public readonly ordemDeServicoId: string,

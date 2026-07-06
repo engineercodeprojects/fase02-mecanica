@@ -10,7 +10,6 @@ import {
   Patch,
   Post,
   Query,
-  ConflictException,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -23,15 +22,31 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import { ProdutoService } from '../application/produto.service';
 import { CreateProdutoDto } from './dto/create-produto.dto';
 import { UpdateProdutoDto } from './dto/update-produto.dto';
 import { QueryProdutoDto } from './dto/query-produto.dto';
 import { AddStockDto } from './dto/add-stock.dto';
-import { DuplicateNameError } from '../domain/errors/duplicate-name.error';
-import { InsufficientStockError } from '../domain/errors/insufficient-stock.error';
+import { EntradaEstoqueDto } from './dto/entrada-estoque.dto';
+import { SaidaEstoqueDto } from './dto/saida-estoque.dto';
+import { QueryMovimentacoesDto } from './dto/query-movimentacoes.dto';
+import { MovimentacaoEstoqueResponseDto } from './dto/movimentacao-response.dto';
 import { Roles } from '../../auth/infrastructure/decorators/roles.decorator';
+import { CurrentUser } from '../../auth/infrastructure/decorators/current-user.decorator';
+import { Usuario } from '../../auth/domain/usuario.entity';
 import { Role } from '../../auth/domain/role.enum';
+import { CriarProdutoUseCase } from '../application/use-cases/criar-produto.use-case';
+import { ListarProdutosUseCase } from '../application/use-cases/listar-produtos.use-case';
+import { BuscarProdutoPorIdUseCase } from '../application/use-cases/buscar-produto-por-id.use-case';
+import { ListarProdutosEstoqueBaixoUseCase } from '../application/use-cases/listar-produtos-estoque-baixo.use-case';
+import { AtualizarProdutoUseCase } from '../application/use-cases/atualizar-produto.use-case';
+import { DeletarProdutoUseCase } from '../application/use-cases/deletar-produto.use-case';
+import { AdicionarEstoqueUseCase } from '../application/use-cases/adicionar-estoque.use-case';
+import { RemoverEstoqueUseCase } from '../application/use-cases/remover-estoque.use-case';
+import { ReservarEstoqueUseCase } from '../application/use-cases/reservar-estoque.use-case';
+import { LiberarEstoqueUseCase } from '../application/use-cases/liberar-estoque.use-case';
+import { ListarMovimentacoesUseCase } from '../application/use-cases/listar-movimentacoes.use-case';
+import { ProdutoPresenter } from './presenters/produto.presenter';
+import { MovimentacaoPresenter } from './presenters/movimentacao.presenter';
 
 @ApiTags('Produtos')
 @ApiBearerAuth()
@@ -39,7 +54,19 @@ import { Role } from '../../auth/domain/role.enum';
 @ApiForbiddenResponse({ description: 'Role insuficiente' })
 @Controller('produtos')
 export class ProdutoController {
-  constructor(private readonly service: ProdutoService) {}
+  constructor(
+    private readonly criarProduto: CriarProdutoUseCase,
+    private readonly listarProdutos: ListarProdutosUseCase,
+    private readonly buscarProdutoPorId: BuscarProdutoPorIdUseCase,
+    private readonly listarEstoqueBaixo: ListarProdutosEstoqueBaixoUseCase,
+    private readonly atualizarProduto: AtualizarProdutoUseCase,
+    private readonly deletarProduto: DeletarProdutoUseCase,
+    private readonly adicionarEstoque: AdicionarEstoqueUseCase,
+    private readonly removerEstoque: RemoverEstoqueUseCase,
+    private readonly reservarEstoque: ReservarEstoqueUseCase,
+    private readonly liberarEstoque: LiberarEstoqueUseCase,
+    private readonly listarMovimentacoes: ListarMovimentacoesUseCase,
+  ) {}
 
   @Post()
   @Roles(Role.ADMIN, Role.ESTOQUISTA)
@@ -47,14 +74,19 @@ export class ProdutoController {
   @ApiCreatedResponse({ description: 'Produto criado com sucesso' })
   @ApiConflictResponse({ description: 'Ja existe um produto com esse nome' })
   async create(@Body() dto: CreateProdutoDto) {
-    try {
-      return this.toResponse(await this.service.create(dto));
-    } catch (error) {
-      if (error instanceof DuplicateNameError) {
-        throw new ConflictException(error.message);
-      }
-      throw error;
-    }
+    const produto = await this.criarProduto.execute(dto);
+    return ProdutoPresenter.toResponse(produto);
+  }
+
+  @Get('estoque-baixo')
+  @Roles(Role.ADMIN, Role.ATENDENTE, Role.ESTOQUISTA)
+  @ApiOperation({
+    summary: 'Listar produtos com estoque abaixo do minimo',
+  })
+  @ApiOkResponse({ description: 'Lista de produtos com alerta de estoque' })
+  async findLowStock() {
+    const produtos = await this.listarEstoqueBaixo.execute();
+    return ProdutoPresenter.toResponseList(produtos);
   }
 
   @Get()
@@ -62,18 +94,12 @@ export class ProdutoController {
   @ApiOperation({ summary: 'Listar produtos com paginacao e filtro' })
   @ApiOkResponse({ description: 'Lista de produtos paginada' })
   async findAll(@Query() query: QueryProdutoDto) {
-    const result = await this.service.findAll({
+    const result = await this.listarProdutos.execute({
       page: query.page!,
       limit: query.limit!,
       nome: query.nome,
     });
-
-    return {
-      data: result.data.map((p) => this.toResponse(p)),
-      total: result.total,
-      page: result.page,
-      limit: result.limit,
-    };
+    return ProdutoPresenter.toPaginatedResponse(result);
   }
 
   @Get(':id')
@@ -82,7 +108,8 @@ export class ProdutoController {
   @ApiOkResponse({ description: 'Produto encontrado' })
   @ApiNotFoundResponse({ description: 'Produto nao encontrado' })
   async findById(@Param('id', ParseUUIDPipe) id: string) {
-    return this.toResponse(await this.service.findById(id));
+    const produto = await this.buscarProdutoPorId.execute({ id });
+    return ProdutoPresenter.toResponse(produto);
   }
 
   @Patch(':id')
@@ -95,26 +122,93 @@ export class ProdutoController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateProdutoDto,
   ) {
-    try {
-      return this.toResponse(await this.service.update(id, dto));
-    } catch (error) {
-      if (error instanceof DuplicateNameError) {
-        throw new ConflictException(error.message);
-      }
-      throw error;
-    }
+    const produto = await this.atualizarProduto.execute({ id, props: dto });
+    return ProdutoPresenter.toResponse(produto);
   }
 
   @Post(':id/estoque')
   @Roles(Role.ADMIN, Role.ESTOQUISTA)
-  @ApiOperation({ summary: 'Adicionar quantidade ao estoque' })
+  @ApiOperation({
+    summary: 'Adicionar quantidade ao estoque (legado, use /entrada)',
+    deprecated: true,
+  })
   @ApiOkResponse({ description: 'Estoque atualizado com sucesso' })
   @ApiNotFoundResponse({ description: 'Produto nao encontrado' })
   async addStock(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: AddStockDto,
+    @CurrentUser() usuario: Usuario,
   ) {
-    return this.toResponse(await this.service.addStock(id, dto.quantidade));
+    const produto = await this.adicionarEstoque.execute({
+      id,
+      quantidade: dto.quantidade,
+      ctx: { usuarioId: usuario.id },
+    });
+    return ProdutoPresenter.toResponse(produto);
+  }
+
+  @Post(':id/entrada')
+  @Roles(Role.ADMIN, Role.ESTOQUISTA)
+  @ApiOperation({
+    summary: 'Registrar entrada de estoque (compra, ajuste, etc.)',
+  })
+  @ApiOkResponse({ description: 'Entrada registrada com sucesso' })
+  @ApiNotFoundResponse({ description: 'Produto nao encontrado' })
+  async entradaEstoque(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: EntradaEstoqueDto,
+    @CurrentUser() usuario: Usuario,
+  ) {
+    const produto = await this.adicionarEstoque.execute({
+      id,
+      quantidade: dto.quantidade,
+      ctx: { motivo: dto.motivo, usuarioId: usuario.id },
+    });
+    return ProdutoPresenter.toResponse(produto);
+  }
+
+  @Post(':id/saida')
+  @Roles(Role.ADMIN, Role.ESTOQUISTA)
+  @ApiOperation({
+    summary: 'Registrar saida manual de estoque (ajuste, perda)',
+  })
+  @ApiOkResponse({ description: 'Saida registrada com sucesso' })
+  @ApiNotFoundResponse({ description: 'Produto nao encontrado' })
+  @ApiConflictResponse({
+    description: 'Quantidade excede o estoque disponivel',
+  })
+  async saidaEstoque(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SaidaEstoqueDto,
+    @CurrentUser() usuario: Usuario,
+  ) {
+    const produto = await this.removerEstoque.execute({
+      id,
+      quantidade: dto.quantidade,
+      ctx: { motivo: dto.motivo, usuarioId: usuario.id },
+    });
+    return ProdutoPresenter.toResponse(produto);
+  }
+
+  @Get(':id/movimentacoes')
+  @Roles(Role.ADMIN, Role.ATENDENTE, Role.ESTOQUISTA)
+  @ApiOperation({ summary: 'Listar movimentacoes de estoque do produto' })
+  @ApiOkResponse({
+    description: 'Movimentacoes paginadas',
+    type: MovimentacaoEstoqueResponseDto,
+    isArray: true,
+  })
+  async movimentacoes(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: QueryMovimentacoesDto,
+  ) {
+    const result = await this.listarMovimentacoes.execute({
+      page: query.page ?? 1,
+      limit: query.limit ?? 20,
+      produtoId: id,
+      tipo: query.tipo,
+    });
+    return MovimentacaoPresenter.toPaginatedResponse(result);
   }
 
   @Post(':id/reservar')
@@ -126,14 +220,11 @@ export class ProdutoController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: AddStockDto,
   ) {
-    try {
-      return this.toResponse(await this.service.reserveStock(id, dto.quantidade));
-    } catch (error) {
-      if (error instanceof InsufficientStockError) {
-        throw new ConflictException(error.message);
-      }
-      throw error;
-    }
+    const produto = await this.reservarEstoque.execute({
+      id,
+      quantidade: dto.quantidade,
+    });
+    return ProdutoPresenter.toResponse(produto);
   }
 
   @Post(':id/liberar')
@@ -145,7 +236,11 @@ export class ProdutoController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: AddStockDto,
   ) {
-    return this.toResponse(await this.service.releaseStock(id, dto.quantidade));
+    const produto = await this.liberarEstoque.execute({
+      id,
+      quantidade: dto.quantidade,
+    });
+    return ProdutoPresenter.toResponse(produto);
   }
 
   @Delete(':id')
@@ -155,32 +250,6 @@ export class ProdutoController {
   @ApiOkResponse({ description: 'Produto removido com sucesso' })
   @ApiNotFoundResponse({ description: 'Produto nao encontrado' })
   async delete(@Param('id', ParseUUIDPipe) id: string) {
-    await this.service.delete(id);
-  }
-
-  private toResponse(produto: {
-    id?: string;
-    nome: string;
-    descricao?: string | null;
-    precoUnitario: { value: number };
-    quantidadeEstoque: number;
-    quantidadeReservada: number;
-    quantidadeDisponivel: number;
-    estoqueMinimo: number;
-    ativo: boolean;
-    isLowStock: () => boolean;
-  }) {
-    return {
-      id: produto.id,
-      nome: produto.nome,
-      descricao: produto.descricao,
-      precoUnitario: produto.precoUnitario.value,
-      quantidadeEstoque: produto.quantidadeEstoque,
-      quantidadeReservada: produto.quantidadeReservada,
-      quantidadeDisponivel: produto.quantidadeDisponivel,
-      estoqueMinimo: produto.estoqueMinimo,
-      ativo: produto.ativo,
-      alertaEstoqueBaixo: produto.isLowStock(),
-    };
+    await this.deletarProduto.execute({ id });
   }
 }

@@ -1,5 +1,8 @@
 import { InvalidQuantityError } from '../errors/invalid-quantity.error';
 import { InvalidPriceError } from '../errors/invalid-price.error';
+import { ProdutoAlreadyAddedError } from '../errors/produto-already-added.error';
+import { ProdutoNotAddedError } from '../errors/produto-not-added.error';
+import { ItemProdutoOS } from './item-produto-os.vo';
 
 export type StatusExecucaoItem = 'PENDENTE' | 'EM_EXECUCAO' | 'CONCLUIDO';
 
@@ -11,6 +14,7 @@ export class ItemServicoOS {
   readonly inicioExecucao: Date | null;
   readonly fimExecucao: Date | null;
   readonly horasTrabalhadas: number | null;
+  readonly produtos: ReadonlyArray<ItemProdutoOS>;
 
   constructor(
     servicoId: string,
@@ -20,6 +24,7 @@ export class ItemServicoOS {
     inicioExecucao: Date | null = null,
     fimExecucao: Date | null = null,
     horasTrabalhadas: number | null = null,
+    produtos: ItemProdutoOS[] = [],
   ) {
     if (!Number.isInteger(quantidade) || quantidade <= 0) {
       throw new InvalidQuantityError(quantidade);
@@ -34,10 +39,19 @@ export class ItemServicoOS {
     this.inicioExecucao = inicioExecucao;
     this.fimExecucao = fimExecucao;
     this.horasTrabalhadas = horasTrabalhadas;
+    this.produtos = produtos;
+  }
+
+  subtotalServico(): number {
+    return this.quantidade * this.precoUnitario;
+  }
+
+  subtotalProdutos(): number {
+    return this.produtos.reduce((sum, p) => sum + p.subtotal(), 0);
   }
 
   subtotal(): number {
-    return this.quantidade * this.precoUnitario;
+    return this.subtotalServico() + this.subtotalProdutos();
   }
 
   iniciar(): ItemServicoOS {
@@ -49,6 +63,7 @@ export class ItemServicoOS {
       new Date(),
       null,
       null,
+      [...this.produtos],
     );
   }
 
@@ -61,6 +76,39 @@ export class ItemServicoOS {
       this.inicioExecucao,
       new Date(),
       horasTrabalhadas,
+      [...this.produtos],
+    );
+  }
+
+  adicionarProduto(produto: ItemProdutoOS): ItemServicoOS {
+    if (this.produtos.some((p) => p.produtoId === produto.produtoId)) {
+      throw new ProdutoAlreadyAddedError(produto.produtoId);
+    }
+    return new ItemServicoOS(
+      this.servicoId,
+      this.quantidade,
+      this.precoUnitario,
+      this.statusExecucao,
+      this.inicioExecucao,
+      this.fimExecucao,
+      this.horasTrabalhadas,
+      [...this.produtos, produto],
+    );
+  }
+
+  removerProduto(produtoId: string): ItemServicoOS {
+    if (!this.produtos.some((p) => p.produtoId === produtoId)) {
+      throw new ProdutoNotAddedError(produtoId);
+    }
+    return new ItemServicoOS(
+      this.servicoId,
+      this.quantidade,
+      this.precoUnitario,
+      this.statusExecucao,
+      this.inicioExecucao,
+      this.fimExecucao,
+      this.horasTrabalhadas,
+      this.produtos.filter((p) => p.produtoId !== produtoId),
     );
   }
 }

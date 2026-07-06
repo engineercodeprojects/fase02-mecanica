@@ -10,6 +10,15 @@ interface OsStatusServico {
   quantidade: number;
   precoUnitario: number;
   subtotal: number;
+  produtos?: OsStatusProduto[];
+}
+
+interface OsStatusProduto {
+  produtoId: string;
+  nome: string;
+  quantidade: number;
+  precoUnitario: number;
+  subtotal: number;
 }
 
 interface OsStatusView {
@@ -19,7 +28,6 @@ interface OsStatusView {
   descricaoInicial: string;
   diagnostico: string | null;
   servicos: OsStatusServico[];
-  produtos: unknown[];
   valorTotalServicos: number;
   valorTotalProdutos: number;
   valorTotal: number;
@@ -119,33 +127,55 @@ export function OsDetalhePage() {
       )}
 
       <section className="rounded-md border border-slate-200 bg-white p-6">
-        <h2 className="font-semibold">Servicos / Orcamento</h2>
-        <table className="mt-4 w-full text-sm">
-          <thead className="text-left text-xs uppercase text-slate-500">
-            <tr>
-              <th className="pb-2">Servico</th>
-              <th className="pb-2 text-right">Qtd</th>
-              <th className="pb-2 text-right">Unit.</th>
-              <th className="pb-2 text-right">Subtotal</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {os.servicos.map((s) => (
-              <tr key={s.servicoId}>
-                <td className="py-2">{s.nome}</td>
-                <td className="py-2 text-right">{s.quantidade}</td>
-                <td className="py-2 text-right">
-                  {formatCurrency(Number(s.precoUnitario))}
-                </td>
-                <td className="py-2 text-right">
+        <h2 className="font-semibold">Servicos e produtos / Orcamento</h2>
+        <div className="mt-4 space-y-3">
+          {os.servicos.map((s) => (
+            <div
+              key={s.servicoId}
+              className="rounded border border-slate-200 p-3"
+            >
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-medium">{s.nome}</span>
+                <span className="text-slate-700">
+                  {s.quantidade} × {formatCurrency(Number(s.precoUnitario))} ={' '}
                   {formatCurrency(s.subtotal)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <div className="mt-4 text-right text-lg font-semibold">
-          Total: {formatCurrency(os.valorTotal)}
+                </span>
+              </div>
+              {(s.produtos ?? []).length > 0 && (
+                <table className="mt-3 w-full text-xs text-slate-600">
+                  <thead className="text-left uppercase text-slate-400">
+                    <tr>
+                      <th className="pb-1">Produto</th>
+                      <th className="pb-1 text-right">Qtd</th>
+                      <th className="pb-1 text-right">Unit.</th>
+                      <th className="pb-1 text-right">Subtotal</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {(s.produtos ?? []).map((p) => (
+                      <tr key={p.produtoId}>
+                        <td className="py-1">{p.nome}</td>
+                        <td className="py-1 text-right">{p.quantidade}</td>
+                        <td className="py-1 text-right">
+                          {formatCurrency(Number(p.precoUnitario))}
+                        </td>
+                        <td className="py-1 text-right">
+                          {formatCurrency(p.subtotal)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          ))}
+        </div>
+        <div className="mt-4 space-y-1 text-right text-sm">
+          <div>Servicos: {formatCurrency(os.valorTotalServicos)}</div>
+          <div>Produtos: {formatCurrency(os.valorTotalProdutos)}</div>
+          <div className="text-lg font-semibold">
+            Total: {formatCurrency(os.valorTotal)}
+          </div>
         </div>
       </section>
 

@@ -9,6 +9,7 @@ import { DomainEvent } from '../domain-event';
  */
 export class OsFinalizadaEvent extends DomainEvent {
   static readonly EVENT_NAME = 'os.finalizada';
+  readonly eventName = OsFinalizadaEvent.EVENT_NAME;
 
   constructor(
     public readonly ordemDeServicoId: string,

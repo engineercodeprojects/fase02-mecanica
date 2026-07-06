@@ -1,5 +1,4 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { OnEvent } from '@nestjs/event-emitter';
 import {
   CLIENTE_REPOSITORY,
@@ -7,9 +6,23 @@ import {
 } from '../../../cliente/domain/cliente.repository';
 import { OrcamentoProntoEvent } from '../../../shared/domain/events/orcamento-pronto.event';
 import { OsFinalizadaEvent } from '../../../shared/domain/events/os-finalizada.event';
+import { OsStatusAlteradoEvent } from '../../../ordem-de-servico/domain/events/os-status-alterado.event';
+import { StatusOS } from '../../../ordem-de-servico/domain/value-objects/status-os.vo';
 import { CanalNotificacao } from '../../domain/value-objects/canal-notificacao.vo';
 import { TipoNotificacao } from '../../domain/value-objects/tipo-notificacao.vo';
-import { NotificacaoService } from '../notificacao.service';
+import { EnviarNotificacaoUseCase } from '../use-cases/enviar-notificacao.use-case';
+import { PUBLIC_BASE_URL } from '../ports/public-base-url';
+
+/**
+ * Transicoes que ja disparam uma notificacao dedicada e mais rica
+ * (OrcamentoProntoEvent / OsFinalizadaEvent). A notificacao generica de
+ * mudanca de status e suprimida para esses status para nao notificar o
+ * cliente duas vezes pela mesma transicao.
+ */
+const STATUS_COM_NOTIFICACAO_DEDICADA: ReadonlySet<StatusOS> = new Set([
+  StatusOS.AGUARDANDO_APROVACAO,
+  StatusOS.FINALIZADA,
+]);
 
 @Injectable()
 export class OrdemDeServicoNotificacaoListener {
@@ -17,14 +30,13 @@ export class OrdemDeServicoNotificacaoListener {
   private readonly baseUrl: string;
 
   constructor(
-    private readonly notificacaoService: NotificacaoService,
+    private readonly enviarNotificacao: EnviarNotificacaoUseCase,
     @Inject(CLIENTE_REPOSITORY)
     private readonly clienteRepository: ClienteRepository,
-    private readonly config: ConfigService,
+    @Inject(PUBLIC_BASE_URL)
+    baseUrl: string,
   ) {
-    this.baseUrl = this.config
-      .get<string>('PUBLIC_BASE_URL', 'http://localhost:3000')
-      .replace(/\/+$/, '');
+    this.baseUrl = baseUrl;
   }
 
   @OnEvent(OrcamentoProntoEvent.EVENT_NAME)
@@ -54,7 +66,7 @@ export class OrdemDeServicoNotificacaoListener {
         `Para aprovar: POST ${aprovarUrl}\n` +
         `Para rejeitar: POST ${rejeitarUrl}\n`;
 
-      await this.notificacaoService.enviar({
+      await this.enviarNotificacao.execute({
         clienteId: event.clienteId,
         ordemDeServicoId: event.ordemDeServicoId,
         tipo: TipoNotificacao.ORCAMENTO_PRONTO,
@@ -89,7 +101,7 @@ export class OrdemDeServicoNotificacaoListener {
         `Sua Ordem de Servico ${event.numero} foi finalizada e o veiculo esta pronto para retirada.\n\n` +
         `Para acompanhar a OS: GET ${acompanharUrl}\n`;
 
-      await this.notificacaoService.enviar({
+      await this.enviarNotificacao.execute({
         clienteId: event.clienteId,
         ordemDeServicoId: event.ordemDeServicoId,
         tipo: TipoNotificacao.OS_FINALIZADA,
@@ -101,6 +113,40 @@ export class OrdemDeServicoNotificacaoListener {
     } catch (err) {
       this.logger.error(
         `Erro ao processar OsFinalizadaEvent para OS ${event.numero}`,
+        err instanceof Error ? err.stack : String(err),
+      );
+    }
+  }
+
+  @OnEvent(OsStatusAlteradoEvent.EVENT_NAME)
+  async onOsStatusAlterado(event: OsStatusAlteradoEvent): Promise<void> {
+    if (STATUS_COM_NOTIFICACAO_DEDICADA.has(event.statusAtual)) {
+      return;
+    }
+
+    try {
+      const cliente = await this.clienteRepository.findById(event.clienteId);
+      const destinatario = cliente?.email ?? event.clienteId;
+      const mensagem =
+        `Status da Ordem de Servico ${event.numero} alterado.\n\n` +
+        `Status anterior: ${event.statusAnterior}\n` +
+        `Status atual: ${event.statusAtual}\n`;
+
+      await this.enviarNotificacao.execute({
+        clienteId: event.clienteId,
+        ordemDeServicoId: event.ordemDeServicoId,
+        tipo: TipoNotificacao.STATUS_OS_ALTERADO,
+        canal: CanalNotificacao.EMAIL,
+        destinatario,
+        assunto: `Status da OS ${event.numero}: ${event.statusAtual}`,
+        mensagem,
+        statusAnterior: event.statusAnterior,
+        statusAtual: event.statusAtual,
+        timestamp: event.timestamp,
+      });
+    } catch (err) {
+      this.logger.error(
+        `Erro ao processar OsStatusAlteradoEvent para OS ${event.numero}`,
         err instanceof Error ? err.stack : String(err),
       );
     }

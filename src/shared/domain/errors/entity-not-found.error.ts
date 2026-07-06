@@ -1,4 +1,4 @@
-import { DomainError } from '../domain-error';
+import { DomainError, DomainErrorKind } from '../domain-error';
 
 /**
  * Erro generico de "entidade nao encontrada" — substitui erros
@@ -8,6 +8,8 @@ import { DomainError } from '../domain-error';
  * mas codigo novo pode usar este diretamente.
  */
 export class EntityNotFoundError extends DomainError {
+  readonly kind = DomainErrorKind.NOT_FOUND;
+
   constructor(
     public readonly entityName: string,
     public readonly identifier: string,

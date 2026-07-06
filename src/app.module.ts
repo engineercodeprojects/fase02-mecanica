@@ -1,8 +1,11 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { validateEnv } from './config/env.validation';
+import { HealthModule } from './health/health.module';
+import { SharedModule } from './shared/shared.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { ServicoModule } from './servico/servico.module';
@@ -12,19 +15,22 @@ import { VeiculoModule } from './veiculo/veiculo.module';
 import { OrdemDeServicoModule } from './ordem-de-servico/ordem-de-servico.module';
 import { UsuarioModule } from './usuario/usuario.module';
 import { NotificacaoModule } from './notificacao/notificacao.module';
-import { HealthModule } from './health/health.module';
 import { CorrelationIdInterceptor } from './shared/infrastructure/correlation-id.interceptor';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
     EventEmitterModule.forRoot(),
-    // Rate limit: 60 reqs / 60s por IP no default global
-    // Endpoints sensiveis (auth/login) podem ter limites mais restritos via @Throttle
-    ThrottlerModule.forRoot([
-      { name: 'default', ttl: 60_000, limit: 60 },
-    ]),
+    // Rate limiting global (anti brute-force/DoS). Desabilitado sob jest
+    // (JEST_WORKER_ID) para nao introduzir flakiness por 429 nos testes e2e.
+    ThrottlerModule.forRoot({
+      throttlers: [{ ttl: 60000, limit: 100 }],
+      skipIf: () =>
+        process.env.NODE_ENV === 'test' || !!process.env.JEST_WORKER_ID,
+    }),
+    SharedModule,
     PrismaModule,
+    HealthModule,
     AuthModule,
     UsuarioModule,
     ServicoModule,
@@ -33,7 +39,6 @@ import { CorrelationIdInterceptor } from './shared/infrastructure/correlation-id
     VeiculoModule,
     OrdemDeServicoModule,
     NotificacaoModule,
-    HealthModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

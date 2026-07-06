@@ -1,29 +1,42 @@
 import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import { PrismaService } from '../prisma/prisma.service';
+import {
+  ApiOkResponse,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
+import { SkipThrottle } from '@nestjs/throttler';
 import { Public } from '../auth/infrastructure/decorators/public.decorator';
+import { PrismaService } from '../prisma/prisma.service';
 
 interface HealthResult {
-  status: 'ok' | 'error';
+  status: 'ok' | 'ready' | 'not-ready';
   timestamp: string;
   uptime: number;
-  checks: Record<string, { status: 'ok' | 'error'; message?: string }>;
+  checks?: Record<string, { status: 'ok' | 'error'; message?: string }>;
 }
 
 @ApiTags('Health')
-@Controller()
+@SkipThrottle()
+@Controller('health')
 export class HealthController {
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * Liveness probe — responde se o processo esta vivo.
-   * Nao verifica dependencias (banco etc.); usado por k8s pra
-   * decidir se o pod precisa ser reiniciado.
-   */
+  @Get()
   @Public()
-  @Get('health')
-  @ApiOperation({ summary: 'Liveness probe (sempre 200 enquanto o processo esta vivo)' })
-  health(): HealthResult {
+  @ApiOperation({ summary: 'Liveness probe - o processo esta de pe' })
+  @ApiOkResponse({
+    description: 'Aplicacao respondendo',
+    schema: {
+      example: {
+        status: 'ok',
+        timestamp: '2024-01-01T00:00:00.000Z',
+        uptime: 123.45,
+        checks: { app: { status: 'ok' } },
+      },
+    },
+  })
+  liveness(): HealthResult {
     return {
       status: 'ok',
       timestamp: new Date().toISOString(),
@@ -32,39 +45,53 @@ export class HealthController {
     };
   }
 
-  /**
-   * Readiness probe — verifica se as dependencias estao OK
-   * (banco, etc.). Se falhar, k8s para de mandar trafego pro pod
-   * mas nao reinicia.
-   */
-  @Public()
   @Get('ready')
-  @ApiOperation({ summary: 'Readiness probe (verifica banco)' })
-  async ready(): Promise<HealthResult> {
-    const checks: HealthResult['checks'] = {};
-    let allOk = true;
-
+  @Public()
+  @ApiOperation({ summary: 'Readiness probe - verifica conectividade com o banco' })
+  @ApiOkResponse({
+    description: 'Banco acessivel',
+    schema: {
+      example: {
+        status: 'ready',
+        timestamp: '2024-01-01T00:00:00.000Z',
+        uptime: 123.45,
+        checks: { database: { status: 'ok' } },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 503,
+    description: 'Banco inacessivel',
+    schema: {
+      example: {
+        status: 'not-ready',
+        timestamp: '2024-01-01T00:00:00.000Z',
+        uptime: 123.45,
+        checks: { database: { status: 'error', message: 'connection refused' } },
+      },
+    },
+  })
+  async readiness(): Promise<HealthResult> {
     try {
       await this.prisma.$queryRaw`SELECT 1`;
-      checks.database = { status: 'ok' };
-    } catch (err) {
-      allOk = false;
-      checks.database = {
-        status: 'error',
-        message: err instanceof Error ? err.message : 'unknown',
+      return {
+        status: 'ready',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        checks: { database: { status: 'ok' } },
       };
+    } catch (err) {
+      throw new ServiceUnavailableException({
+        status: 'not-ready',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        checks: {
+          database: {
+            status: 'error',
+            message: err instanceof Error ? err.message : 'unknown',
+          },
+        },
+      });
     }
-
-    const result: HealthResult = {
-      status: allOk ? 'ok' : 'error',
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      checks,
-    };
-
-    if (!allOk) {
-      throw new ServiceUnavailableException(result);
-    }
-    return result;
   }
 }
