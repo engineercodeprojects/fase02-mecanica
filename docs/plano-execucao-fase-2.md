@@ -167,9 +167,30 @@ Dependência: tudo acima decidido.
 
 ---
 
-## Onda 7 — Entrega final (0.5 dia)
+## Onda 7 — Testes de carga e escalabilidade (1.5 dia)
 
-Dependência: tudo pronto.
+Dependência: Ondas 3 (manifestos K8s + HPA), 4 (Terraform cluster + DB) e 5 (CI/CD com kind efêmero). **Precede a Onda 8 (entrega)** — os testes de carga geram a evidência que alimenta o vídeo.
+
+**Objetivo:** provar que o sistema aguenta volume alto de requests e **escala sozinho via HPA sem falhar**, formalizando a validação ad-hoc do vídeo (Onda 8, passos `hey`/`ab` + "ver HPA criando pods") como testes reproduzíveis com SLOs versionados como código.
+
+Ver [US-F2-11](user-stories/f2-11-testes-carga-escalabilidade.md).
+
+- Suite de performance em `perf/` com **k6** (thresholds nativos que reprovam com exit code != 0) e **autocannon**/`hey` para smoke rápido
+- Cinco tipos de teste: **load** (carga sustentada), **stress** (achar o ponto de ruptura, com gate de regressão mínimo), **spike** (pico súbito), **soak/endurance** (detectar memory leak; memória do pod via `kubectl top`, não pelo k6) e **escalabilidade** (assert do HPA reagindo à carga — replicas > min rumo a máx, e voltando a min)
+- SLOs de partida (p95/p99, nunca média): `http_req_failed < 1%` (429 conta como falha, pois o throttler está off); reads p95 < 500ms / p99 < 1000ms; writes p95 < 800ms / p99 < 1500ms
+- **Tratar o throttler** (`@nestjs/throttler` global 100 req/60s): **implementar o hook `THROTTLER_DISABLED=true`** em `src/app.module.ts` (pré-requisito de código) e subir a app-alvo com ele; passo de sanidade anti-429. Cenário separado valida o próprio throttler (429 sob abuso, throttler ligado)
+- **HPA em kind:** instalar `metrics-server` com `--kubelet-insecure-tls` e **aguardar readiness + `TARGETS` sair de `<unknown>`** antes de medir; gerar carga contra endpoint que satura a CPU do POD (validar com `kubectl top pod`, ou usar HPA por memória como gatilho alternativo); **reconciliar nomes** (`mecanica`->`oficina`, `mecanica-app`->`app`, HPA min=1/máx=3 -> min=2/máx=10) e deployar via `kubectl apply -k k8s/`; asserts com limiar numérico + janela temporal (scale-up >= N replicas em T s; scale-down volta a min sem thrashing); SLO de erro/latência mantido **durante** o rollout ("sem falhar")
+- CI **on-demand** (`.github/workflows/perf-test.yml`, `workflow_dispatch` com input `test_type`) — nunca no push/PR padrão; no runner (kind single-node, 2 vCPU) prova o **mecanismo** do HPA, não a capacidade real de 10 réplicas; relatórios JSON/HTML como artefato + resumo no `$GITHUB_STEP_SUMMARY`
+- load/stress/spike/soak completos rodam **local** (docker compose) como fonte-de-verdade; no CI apenas versões curtas (smoke + load 1-2min)
+- Documentar no README como rodar localmente; a suite **não conta** para o gate de 80% de cobertura
+
+Alimenta diretamente o vídeo da Onda 8 (etapa "gerar carga → ver HPA criando pods").
+
+---
+
+## Onda 8 — Entrega final (0.5 dia)
+
+Dependência: Onda 7 (evidência de carga/HPA) + tudo pronto.
 
 - **Vídeo (≤15min)** — roteiro:
   1. Deploy via CI/CD
@@ -182,17 +203,18 @@ Dependência: tudo pronto.
 
 ---
 
-## Cronograma sugerido (1 pessoa, ~11 dias úteis)
+## Cronograma sugerido (1 pessoa, ~12-13 dias úteis)
 
 ```
-Dia  1-2  │ Onda 1 (APIs)                  ▓▓▓▓
-Dia  1    │ Onda 2 (Docker)                ▓           (paralelo)
-Dia  2-4  │ Onda 4 (Terraform cluster+DB)  ▓▓▓▓▓▓      (precede Onda 3)
-Dia  5-6  │ Onda 3 (K8s da app)            ▓▓▓▓
-Dia  7-8  │ Onda 5 (CI/CD)                 ▓▓▓
-Dia  9    │ Onda 6 (Docs + diag)           ▓▓
-Dia 10    │ Onda 7 (Vídeo + PDF)           ▓
-Dia 11    │ Buffer / correções             ░░
+Dia  1-2   │ Onda 1 (APIs)                    ▓▓▓▓
+Dia  1     │ Onda 2 (Docker)                  ▓           (paralelo)
+Dia  2-4   │ Onda 4 (Terraform cluster+DB)    ▓▓▓▓▓▓      (precede Onda 3)
+Dia  5-6   │ Onda 3 (K8s da app)              ▓▓▓▓
+Dia  7-8   │ Onda 5 (CI/CD)                   ▓▓▓
+Dia  9     │ Onda 6 (Docs + diag)             ▓▓
+Dia 10-11  │ Onda 7 (Carga + escalabilidade)  ▓▓▓
+Dia 12     │ Onda 8 (Vídeo + PDF)             ▓
+Dia 13     │ Buffer / correções               ░░
 ```
 
 ---
