@@ -130,440 +130,119 @@ jobs:
           retention-days: 1
 
   # ---------------------------------------------------------------------------
-  # Passo 4: Deploy do banco de dados
+  # Passo 4: Provisionamento (Terraform) + Deploy dos manifestos (kubectl -k)
+  #
+  # Substitui os antigos jobs que subiam um Postgres inline com convencoes
+  # divergentes. Agora o cluster e o banco vem do IaC versionado (US-F2-06) e a
+  # aplicacao dos manifestos Kustomize versionados (US-F2-05) — uma unica fonte
+  # de verdade para o deploy.
+  #
+  # Fluxo: terraform apply 01 (cluster kind) -> load da imagem no cluster ->
+  # terraform apply 02 (Postgres + Secret oficina-db) -> kubectl apply -k k8s/.
   # ---------------------------------------------------------------------------
-  deploy-database:
-    name: "4️⃣ Deploy do Banco de Dados"
+  deploy-terraform-k8s:
+    name: "4️⃣ Provisionamento (Terraform) + Deploy (k8s)"
     runs-on: ubuntu-latest
     needs: build-docker-image
+    timeout-minutes: 25
+    env:
+      TF_IN_AUTOMATION: "true"
+      KIND_CLUSTER: oficina-local
+      APP_IMAGE: oficina-mecanica-app:latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - name: Create Kind cluster
-        uses: helm/kind-action@v1.11.0
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
         with:
-          cluster_name: ci-cluster
+          terraform_version: "1.9.8"
+          terraform_wrapper: false
 
       - name: Setup kubectl
         uses: azure/setup-kubectl@v4
 
-      - name: Create namespace
-        run: kubectl create namespace mecanica || true
-
-      - name: Deploy PostgreSQL database
+      - name: Install kind CLI
         run: |
-          echo "🗄️  Deploying PostgreSQL database..."
-          kubectl apply -f - -n mecanica <<'EOF'
-          apiVersion: v1
-          kind: ConfigMap
-          metadata:
-            name: postgres-config
-          data:
-            POSTGRES_DB: mecanica_db
-            POSTGRES_USER: postgres
-            POSTGRES_PASSWORD: "postgres"
-          ---
-          apiVersion: apps/v1
-          kind: Deployment
-          metadata:
-            name: postgres
-            labels:
-              app: postgres
-          spec:
-            replicas: 1
-            selector:
-              matchLabels:
-                app: postgres
-            template:
-              metadata:
-                labels:
-                  app: postgres
-              spec:
-                containers:
-                - name: postgres
-                  image: postgres:15-alpine
-                  ports:
-                  - containerPort: 5432
-                  envFrom:
-                  - configMapRef:
-                      name: postgres-config
-          ---
-          apiVersion: v1
-          kind: Service
-          metadata:
-            name: postgres
-            labels:
-              app: postgres
-          spec:
-            selector:
-              app: postgres
-            ports:
-            - port: 5432
-              targetPort: 5432
-            type: ClusterIP
-          EOF
-          echo "✅ PostgreSQL deployed successfully"
+          curl -sSLo ./kind https://kind.sigs.k8s.io/dl/v0.24.0/kind-linux-amd64
+          chmod +x ./kind && sudo mv ./kind /usr/local/bin/kind
+          kind version
 
-      - name: Wait for PostgreSQL to be ready
-        run: |
-          echo "⏳ Waiting for PostgreSQL to be ready..."
-          kubectl rollout status deployment/postgres -n mecanica --timeout=2m || true
-          sleep 5
-
-  # ---------------------------------------------------------------------------
-  # Passo 5: Deploy no cluster Kubernetes
-  # ---------------------------------------------------------------------------
-  deploy-kubernetes:
-    name: "5️⃣ Deploy no Cluster Kubernetes"
-    runs-on: ubuntu-latest
-    needs: [deploy-database, build-docker-image]
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-
-      - name: Create Kind cluster
-        uses: helm/kind-action@v1.11.0
-        with:
-          cluster_name: ci-cluster
-
-      - name: Setup kubectl
-        uses: azure/setup-kubectl@v4
-
-      - name: Create namespace
-        run: kubectl create namespace mecanica || true
-
-      - name: Deploy PostgreSQL database (prerequisite)
-        run: |
-          echo "🗄️  Re-deploying PostgreSQL..."
-          kubectl apply -f - -n mecanica <<'EOF'
-          apiVersion: v1
-          kind: ConfigMap
-          metadata:
-            name: postgres-config
-          data:
-            POSTGRES_DB: mecanica_db
-            POSTGRES_USER: postgres
-            POSTGRES_PASSWORD: "postgres"
-          ---
-          apiVersion: apps/v1
-          kind: Deployment
-          metadata:
-            name: postgres
-            labels:
-              app: postgres
-          spec:
-            replicas: 1
-            selector:
-              matchLabels:
-                app: postgres
-            template:
-              metadata:
-                labels:
-                  app: postgres
-              spec:
-                containers:
-                - name: postgres
-                  image: postgres:15-alpine
-                  ports:
-                  - containerPort: 5432
-                  envFrom:
-                  - configMapRef:
-                      name: postgres-config
-          ---
-          apiVersion: v1
-          kind: Service
-          metadata:
-            name: postgres
-            labels:
-              app: postgres
-          spec:
-            selector:
-              app: postgres
-            ports:
-            - port: 5432
-              targetPort: 5432
-            type: ClusterIP
-          EOF
-          echo "✅ PostgreSQL ready"
-
-      - name: Wait for PostgreSQL
-        run: |
-          echo "⏳ Waiting for PostgreSQL..."
-          kubectl rollout status deployment/postgres -n mecanica --timeout=2m || true
-          sleep 5
-
-      - name: Download Docker image
+      - name: Download Docker image artifact
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: docker-image
           path: /tmp/docker-image
 
-      - name: Load Docker image into Kind cluster
+      # --- Stage 01: cluster kind via Terraform (US-F2-06) -------------------
+      - name: Terraform apply — cluster (01-cluster)
+        working-directory: infra/terraform/01-cluster
         run: |
-          echo "📦 Loading Docker image into Kind cluster..."
-          kind load image-archive /tmp/docker-image/image.tar --name ci-cluster
-          echo "✅ Docker image loaded successfully"
+          terraform init -input=false
+          terraform apply -auto-approve -input=false -var "kind_worker_count=1"
+          echo "KUBECONFIG=$HOME/.kube/oficina-mecanica.config" >> "$GITHUB_ENV"
 
-      - name: Deploy application to Kubernetes
+      - name: Sanity — cluster acessível
+        run: kubectl cluster-info --context "kind-${KIND_CLUSTER}"
+
+      # --- Carrega a imagem construída no passo 3 dentro do cluster ----------
+      - name: Load app image into kind
         run: |
-          echo "🚀 Deploying application to Kubernetes..."
-          kubectl apply -f - -n mecanica <<'EOF'
+          docker load -i /tmp/docker-image/image.tar
+          docker tag "${REGISTRY}/${IMAGE_NAME}:${GITHUB_SHA}" "${APP_IMAGE}"
+          kind load docker-image "${APP_IMAGE}" --name "${KIND_CLUSTER}"
+
+      # --- Stage 02: Postgres + Secret oficina-db via Terraform (US-F2-06) ---
+      - name: Terraform apply — banco + secret (02-app)
+        working-directory: infra/terraform/02-app
+        run: |
+          terraform init -input=false
+          terraform apply -auto-approve -input=false
+
+      # --- Secret da aplicação (oficina-app) para o Kustomize agregar --------
+      # Contrato single-writer-per-Secret: oficina-db vem do Terraform (acima);
+      # oficina-app é o dono do Kustomize. Aqui geramos valores de CI.
+      - name: Gerar k8s/secret.yaml (oficina-app) para o CI
+        run: |
+          cat > k8s/secret.yaml <<EOF
           apiVersion: v1
           kind: Secret
           metadata:
-            name: app-secrets
+            name: oficina-app
           type: Opaque
           stringData:
-            DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/mecanica_db"
-            JWT_SECRET: "ci-test-secret"
-            JWT_EXPIRES_IN: "86400"
-          ---
-          apiVersion: apps/v1
-          kind: Deployment
-          metadata:
-            name: mecanica-app
-            labels:
-              app: mecanica-app
-          spec:
-            replicas: 1
-            selector:
-              matchLabels:
-                app: mecanica-app
-            template:
-              metadata:
-                labels:
-                  app: mecanica-app
-              spec:
-                containers:
-                - name: app
-                  image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-                  imagePullPolicy: IfNotPresent
-                  ports:
-                  - containerPort: 3000
-                  env:
-                  - name: NODE_ENV
-                    value: "production"
-                  - name: DATABASE_URL
-                    valueFrom:
-                      secretKeyRef:
-                        name: app-secrets
-                        key: DATABASE_URL
-                  - name: JWT_SECRET
-                    valueFrom:
-                      secretKeyRef:
-                        name: app-secrets
-                        key: JWT_SECRET
-                  - name: JWT_EXPIRES_IN
-                    valueFrom:
-                      secretKeyRef:
-                        name: app-secrets
-                        key: JWT_EXPIRES_IN
+            JWT_SECRET: "$(openssl rand -base64 48)"
+            WEBHOOK_APPROVAL_TOKEN: "ci-approval-token"
+            NOTIFICATION_WEBHOOK_SECRET: "ci-notification-secret"
           EOF
-          echo "✅ Application deployed successfully"
 
-      - name: Wait for application
+      # --- Deploy da aplicação pelos manifestos versionados (US-F2-05) -------
+      - name: kubectl apply -k k8s/
+        run: kubectl apply -k k8s/
+
+      - name: Aguardar migrations e rollout da aplicação
         run: |
-          echo "⏳ Waiting for application to be ready..."
-          kubectl rollout status deployment/mecanica-app -n mecanica --timeout=2m || true
-          sleep 5
+          kubectl wait --for=condition=complete job/oficina-migrations -n oficina --timeout=180s \
+            || kubectl logs job/oficina-migrations -n oficina --all-containers=true || true
+          kubectl rollout status deployment/oficina-app -n oficina --timeout=240s
 
-  # ---------------------------------------------------------------------------
-  # Passo 6: Aplicação dos manifestos YAML no cluster
-  # ---------------------------------------------------------------------------
-  apply-manifests:
-    name: "6️⃣ Aplicação dos Manifestos YAML"
-    runs-on: ubuntu-latest
-    needs: deploy-kubernetes
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-
-      - name: Create Kind cluster
-        uses: helm/kind-action@v1.11.0
-        with:
-          cluster_name: ci-cluster
-
-      - name: Setup kubectl
-        uses: azure/setup-kubectl@v4
-
-      - name: Create namespace
-        run: kubectl create namespace mecanica || true
-
-      - name: Deploy database infrastructure
+      - name: Smoke test — /health e /health/ready
         run: |
-          echo "📋 Applying database manifests..."
-          kubectl apply -f - -n mecanica <<'EOF'
-          apiVersion: v1
-          kind: ConfigMap
-          metadata:
-            name: postgres-config
-          data:
-            POSTGRES_DB: mecanica_db
-            POSTGRES_USER: postgres
-            POSTGRES_PASSWORD: "postgres"
-          ---
-          apiVersion: apps/v1
-          kind: Deployment
-          metadata:
-            name: postgres
-            labels:
-              app: postgres
-          spec:
-            replicas: 1
-            selector:
-              matchLabels:
-                app: postgres
-            template:
-              metadata:
-                labels:
-                  app: postgres
-              spec:
-                containers:
-                - name: postgres
-                  image: postgres:15-alpine
-                  ports:
-                  - containerPort: 5432
-                  envFrom:
-                  - configMapRef:
-                      name: postgres-config
-          ---
-          apiVersion: v1
-          kind: Service
-          metadata:
-            name: postgres
-            labels:
-              app: postgres
-          spec:
-            selector:
-              app: postgres
-            ports:
-            - port: 5432
-              targetPort: 5432
-            type: ClusterIP
-          EOF
-          echo "✅ Database manifests applied"
+          POD=$(kubectl get pod -n oficina \
+            -l app.kubernetes.io/name=oficina-app,app.kubernetes.io/component=api \
+            -o jsonpath='{.items[0].metadata.name}')
+          echo "🔎 Pod: $POD"
+          echo "→ /health (liveness)"
+          kubectl exec -n oficina "$POD" -- wget -qO- http://localhost:3000/health
+          echo
+          echo "→ /health/ready (readiness, checa o banco)"
+          kubectl exec -n oficina "$POD" -- wget -qO- http://localhost:3000/health/ready
+          echo
 
-      - name: Wait for database
+      - name: Verificar recursos no cluster
+        if: always()
         run: |
-          kubectl rollout status deployment/postgres -n mecanica --timeout=2m || true
-          sleep 5
-
-      - name: Download Docker image
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: docker-image
-          path: /tmp/docker-image
-
-      - name: Load Docker image into Kind
-        run: |
-          kind load image-archive /tmp/docker-image/image.tar --name ci-cluster
-
-      - name: Apply application and infrastructure manifests
-        run: |
-          echo "📦 Applying application manifests (Deployment, Service, HPA)..."
-          kubectl apply -f - -n mecanica <<'EOF'
-          apiVersion: v1
-          kind: Secret
-          metadata:
-            name: app-secrets
-          type: Opaque
-          stringData:
-            DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/mecanica_db"
-            JWT_SECRET: "ci-test-secret"
-            JWT_EXPIRES_IN: "86400"
-          ---
-          apiVersion: apps/v1
-          kind: Deployment
-          metadata:
-            name: mecanica-app
-            labels:
-              app: mecanica-app
-          spec:
-            replicas: 1
-            selector:
-              matchLabels:
-                app: mecanica-app
-            template:
-              metadata:
-                labels:
-                  app: mecanica-app
-              spec:
-                containers:
-                - name: app
-                  image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-                  imagePullPolicy: IfNotPresent
-                  ports:
-                  - containerPort: 3000
-                  env:
-                  - name: NODE_ENV
-                    value: "production"
-                  - name: DATABASE_URL
-                    valueFrom:
-                      secretKeyRef:
-                        name: app-secrets
-                        key: DATABASE_URL
-                  - name: JWT_SECRET
-                    valueFrom:
-                      secretKeyRef:
-                        name: app-secrets
-                        key: JWT_SECRET
-                  - name: JWT_EXPIRES_IN
-                    valueFrom:
-                      secretKeyRef:
-                        name: app-secrets
-                        key: JWT_EXPIRES_IN
-          ---
-          apiVersion: v1
-          kind: Service
-          metadata:
-            name: mecanica-app
-            labels:
-              app: mecanica-app
-          spec:
-            selector:
-              app: mecanica-app
-            ports:
-            - protocol: TCP
-              port: 3000
-              targetPort: 3000
-            type: LoadBalancer
-          ---
-          apiVersion: autoscaling/v2
-          kind: HorizontalPodAutoscaler
-          metadata:
-            name: mecanica-app-hpa
-          spec:
-            scaleTargetRef:
-              apiVersion: apps/v1
-              kind: Deployment
-              name: mecanica-app
-            minReplicas: 1
-            maxReplicas: 3
-            metrics:
-            - type: Resource
-              resource:
-                name: cpu
-                target:
-                  type: Utilization
-                  averageUtilization: 70
-          EOF
-          echo "✅ All manifests applied successfully"
-
-      - name: Verify all resources
-        run: |
-          echo "✅ Verifying Kubernetes resources..."
-          echo ""
-          echo "📦 Deployments:"
-          kubectl get deployments -n mecanica
-          echo ""
-          echo "🐳 Pods:"
-          kubectl get pods -n mecanica
-          echo ""
-          echo "⚙️  Services:"
-          kubectl get svc -n mecanica
-          echo ""
-          echo "📊 HPA (Horizontal Pod Autoscaler):"
-          kubectl get hpa -n mecanica
-          echo ""
-          echo "✅ All Kubernetes resources verified successfully"
+          echo "📦 Recursos no namespace oficina:"
+          kubectl get deploy,pods,svc,hpa,jobs,secret -n oficina || true
 
   # ---------------------------------------------------------------------------
   # Resumo: Pipeline Status
@@ -576,24 +255,20 @@ jobs:
         automated-tests,
         build-application,
         build-docker-image,
-        deploy-database,
-        deploy-kubernetes,
-        apply-manifests,
+        deploy-terraform-k8s,
       ]
     if: always()
     steps:
       - name: Display CI/CD Pipeline Summary
         run: |
           echo "╔════════════════════════════════════════════════════════════════╗"
-          echo "║          CI/CD Pipeline - All 6 Steps Completed               ║"
+          echo "║          CI/CD Pipeline - All 4 Steps Completed               ║"
           echo "╚════════════════════════════════════════════════════════════════╝"
           echo ""
           echo "1️⃣  Execução dos Testes Automatizados: ${{ needs.automated-tests.result }}"
           echo "2️⃣  Build da Aplicação: ${{ needs.build-application.result }}"
           echo "3️⃣  Build da Imagem Docker: ${{ needs.build-docker-image.result }}"
-          echo "4️⃣  Deploy do Banco de Dados: ${{ needs.deploy-database.result }}"
-          echo "5️⃣  Deploy no Cluster Kubernetes: ${{ needs.deploy-kubernetes.result }}"
-          echo "6️⃣  Aplicação dos Manifestos YAML: ${{ needs.apply-manifests.result }}"
+          echo "4️⃣  Provisionamento (Terraform) + Deploy (k8s): ${{ needs.deploy-terraform-k8s.result }}"
           echo ""
           echo "╔════════════════════════════════════════════════════════════════╗"
           echo ""
@@ -601,13 +276,11 @@ jobs:
           if [ "${{ needs.automated-tests.result }}" = "failure" ] || \
              [ "${{ needs.build-application.result }}" = "failure" ] || \
              [ "${{ needs.build-docker-image.result }}" = "failure" ] || \
-             [ "${{ needs.deploy-database.result }}" = "failure" ] || \
-             [ "${{ needs.deploy-kubernetes.result }}" = "failure" ] || \
-             [ "${{ needs.apply-manifests.result }}" = "failure" ]; then
+             [ "${{ needs.deploy-terraform-k8s.result }}" = "failure" ]; then
             echo "❌ Pipeline FALHOU em um ou mais passos"
             echo "╚════════════════════════════════════════════════════════════════╝"
             exit 1
           fi
 
-          echo "✅ Todos os 6 passos da CI/CD executaram com sucesso!"
+          echo "✅ Todos os 4 passos da CI/CD executaram com sucesso!"
           echo "╚════════════════════════════════════════════════════════════════╝"

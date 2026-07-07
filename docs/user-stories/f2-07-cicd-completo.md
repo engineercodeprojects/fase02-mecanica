@@ -4,9 +4,15 @@
 
 **Prioridade:** Alta
 **Story Points:** 5
-**Status:** To Do
+**Status:** In Review
 **DDD Domain:** Infraestrutura
 **DDD Layer:** Infrastructure (CI/CD)
+
+> **Atualização (refino):** a primeira entrega da pipeline subia um Postgres
+> _inline_ (heredoc) em namespace `mecanica`, divergindo do IaC. Este refino faz
+> o job de deploy consumir o **Terraform (US-F2-06)** para cluster + banco e os
+> **manifestos `k8s/` (US-F2-05)** para a app — a fonte única de verdade que esta
+> própria story descreve em `verify-deploy`.
 
 ## Contexto
 
@@ -31,15 +37,16 @@ Hoje `.github/workflows/security.yml` cobre testes + coverage + SAST + Sonar. Fa
   - Tag com `sha` + `latest` (so `latest` em `main`)
   - Push para GHCR (`ghcr.io/<org>/<repo>`)
   - Usa `GITHUB_TOKEN` (sem secret extra)
-- [ ] Job `verify-deploy` (depende de `test` + `build-image`):
-  - Cria cluster `kind` no runner via `helm/kind-action` ou `engineerd/setup-kind`
-  - Roda `terraform init && terraform apply -auto-approve -var="cloud_provider=local"` (provisiona DB Postgres via Helm dentro do kind, cria Secret/ConfigMap/namespace)
-  - Carrega a imagem recem-construida no kind (`kind load docker-image`)
-  - `kubectl apply -k k8s/` aplicando manifestos da app
-  - `kubectl wait --for=condition=available deployment/app -n oficina --timeout=180s`
-  - `kubectl wait --for=condition=complete job/migrations -n oficina --timeout=120s`
-  - **Smoke test:** port-forward + `curl /health` (ou endpoint Swagger) — exit non-zero se falhar
-  - Logs do app sao publicados como artifact em caso de falha
+- [x] Job `deploy-terraform-k8s` (depende de `build-docker-image`):
+  - [x] Cria cluster `kind` no runner via **Terraform** (`01-cluster`, provider `tehcyx/kind`)
+  - [x] `terraform apply` no `02-app` provisiona Postgres + Secret `oficina-db` + namespace `oficina` (kind-only; o `cloud_provider` foi descontinuado na US-F2-06)
+  - [x] Carrega a imagem recem-construida no kind (`kind load docker-image`)
+  - [x] `kubectl apply -k k8s/` aplicando manifestos da app (US-F2-05)
+  - [x] `kubectl rollout status deployment/oficina-app -n oficina --timeout=240s`
+  - [x] `kubectl wait --for=condition=complete job/oficina-migrations -n oficina --timeout=180s`
+  - [x] **Smoke test:** `kubectl exec` + `wget /health` e `/health/ready` — exit non-zero se falhar
+  - [ ] Logs do app publicados como artifact em caso de falha _(hoje: `kubectl get`/logs no output do job; upload como artifact pendente)_
+  - [ ] Push da imagem para GHCR _(a pipeline carrega via tarball no kind; push para registry pendente)_
 
 ### Qualidade da pipeline
 
