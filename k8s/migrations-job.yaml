@@ -1,0 +1,69 @@
+# Job de migrations: roda `prisma migrate deploy` de forma explicita e ordenada,
+# antes (ou em paralelo) ao app subir. O DB precisa existir — e provisionado
+# pelo Terraform (US-F2-06), que tambem cria o Secret `oficina-db`.
+#
+# Observacao: o proprio container da app tambem executa `migrate deploy` no
+# start (CMD do Dockerfile). O `prisma migrate deploy` usa advisory lock no
+# Postgres, entao Job + replicas concorrentes serializam com seguranca. Este
+# Job existe para: (1) tornar a migration um passo explicito e auditavel
+# (`kubectl get jobs`), (2) falhar alto e claro se a migration quebrar.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: oficina-migrations
+  labels:
+    app.kubernetes.io/name: oficina-app
+    app.kubernetes.io/part-of: oficina-mecanica
+    app.kubernetes.io/component: migrations
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  backoffLimit: 6
+  # Remove o Job concluido depois de 5 min, permitindo reaplicar `kubectl apply -k`
+  # apos uma nova migration sem colidir com o Job imutavel anterior.
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: oficina-app
+        app.kubernetes.io/component: migrations
+    spec:
+      restartPolicy: OnFailure
+      # Espera o Postgres aceitar conexao TCP antes de tentar migrar.
+      initContainers:
+        - name: wait-for-db
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              echo "Aguardando ${DB_HOST}:${DB_PORT}..."
+              until nc -z "$DB_HOST" "$DB_PORT"; do sleep 2; done
+              echo "Banco disponivel."
+          env:
+            - name: DB_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: oficina-db
+                  key: DB_HOST
+            - name: DB_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: oficina-db
+                  key: DB_PORT
+      containers:
+        - name: migrate
+          image: oficina-mecanica-app:latest
+          command: ["npx", "prisma", "migrate", "deploy"]
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: oficina-db
+                  key: DATABASE_URL
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"

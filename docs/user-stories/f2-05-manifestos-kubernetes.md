@@ -4,7 +4,7 @@
 
 **Prioridade:** Alta
 **Story Points:** 5
-**Status:** To Do
+**Status:** In Review
 **DDD Domain:** Infraestrutura
 **DDD Layer:** Infrastructure
 
@@ -19,16 +19,16 @@ Os manifestos cobrem **apenas a aplicacao** (deployment, service, HPA, secrets, 
 
 ## Criterios de Aceite
 
-- [ ] Diretorio `k8s/` criado na raiz
-- [ ] `namespace.yaml` — namespace dedicado (ex: `oficina`)
-- [ ] `configmap.yaml` — variaveis nao-sensiveis (`PORT`, `NODE_ENV`, `NOTIFICATION_PROVIDER`)
-- [ ] `secret.yaml.example` — template do Secret **`oficina-app`** com `JWT_SECRET`, `WEBHOOK_APPROVAL_TOKEN`, `NOTIFICATION_WEBHOOK_SECRET` (com nota de NAO commitar `secret.yaml` real). **`DATABASE_URL` NAO entra aqui** — vem do Secret `oficina-db` gerado pelo Terraform (US-F2-06)
-- [ ] `app/deployment.yaml` com 2 replicas iniciais, `livenessProbe`, `readinessProbe`, `resources.requests/limits`
-- [ ] `app/service.yaml` (ClusterIP)
-- [ ] `app/hpa.yaml` — HPA por CPU 70% (min=2, max=10) e por memoria
-- [ ] `migrations-job.yaml` — Job que executa `prisma migrate deploy` antes do app subir (depende do DB ja existir, provisionado pelo Terraform)
-- [ ] `kustomization.yaml` na raiz de `k8s/` agregando os recursos
-- [ ] App lê `DATABASE_URL` do Secret `oficina-db` (gerado pelo Terraform, sem hardcode) — funciona com Postgres dentro do cluster (kind) ou RDS externo
-- [ ] Validado em `kind` local: apos Terraform provisionar cluster + DB, `kubectl apply -k k8s/` sobe a app
-- [ ] Validado HPA: gerar carga e ver `kubectl get hpa` escalando
-- [ ] README seccao "Deploy em Kubernetes" com comandos passo a passo (na ordem: terraform apply → kubectl apply)
+- [x] Diretorio `k8s/` criado na raiz
+- [x] `namespace.yaml` — namespace dedicado (ex: `oficina`)
+- [x] `configmap.yaml` — variaveis nao-sensiveis (`PORT`, `NODE_ENV`, `NOTIFICATION_PROVIDER`)
+- [x] `secret.yaml.example` — template do Secret **`oficina-app`** com `JWT_SECRET`, `WEBHOOK_APPROVAL_TOKEN`, `NOTIFICATION_WEBHOOK_SECRET` (com nota de NAO commitar `secret.yaml` real). **`DATABASE_URL` NAO entra aqui** — vem do Secret `oficina-db` gerado pelo Terraform (US-F2-06)
+- [x] `app/deployment.yaml` com 2 replicas iniciais, `livenessProbe`, `readinessProbe`, `resources.requests/limits`
+- [x] `app/service.yaml` (ClusterIP)
+- [x] `app/hpa.yaml` — HPA por CPU 70% (min=2, max=10) e por memoria
+- [x] `migrations-job.yaml` — Job que executa `prisma migrate deploy` antes do app subir (depende do DB ja existir, provisionado pelo Terraform)
+- [x] `kustomization.yaml` na raiz de `k8s/` agregando os recursos
+- [x] App lê `DATABASE_URL` do Secret `oficina-db` (gerado pelo Terraform, sem hardcode) — funciona com Postgres dentro do cluster (kind) ou RDS externo
+- [ ] Validado em `kind` local: apos Terraform provisionar cluster + DB, `kubectl apply -k k8s/` sobe a app — _pendente: validar em cluster real (validado offline via `kubectl kustomize`)_
+- [ ] Validado HPA: gerar carga e ver `kubectl get hpa` escalando — _pendente: requer metrics-server no cluster_
+- [x] README seccao "Deploy em Kubernetes" com comandos passo a passo (na ordem: terraform apply → kubectl apply) — ver [`k8s/README.md`](../../k8s/README.md)
