@@ -1,0 +1,49 @@
+name: Performance & Escalabilidade (on-demand)
+
+# US-F2-11. Disparo MANUAL (workflow_dispatch) — escolhe o tipo de teste e roda
+# a logica no workflow reutilizavel perf-run.yml. Nunca roda em push/PR padrao,
+# para nao deixar o pipeline principal (ci-cd.yml, <10min) lento.
+#
+# No runner (kind single-node, ~2 vCPU) o teste de HPA prova o MECANISMO (o HPA
+# reage e escala), nao a capacidade real de 10 replicas — o scale-up ate o
+# maximo e validado localmente/no video.
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_type:
+        description: 'Tipo de teste de performance'
+        type: choice
+        default: smoke
+        options:
+          - smoke
+          - load
+          - stress
+          - spike
+          - soak
+          - throttler
+          - hpa
+      duration:
+        description: 'Override de duracao (ex: 2m). Vazio = default do script.'
+        type: string
+        default: ''
+      vus:
+        description: 'Override de VUs. Vazio = default do script.'
+        type: string
+        default: ''
+      write:
+        description: 'Incluir trafego de escrita (cria OS) no load'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    uses: ./.github/workflows/perf-run.yml
+    with:
+      test_type: ${{ inputs.test_type }}
+      duration: ${{ inputs.duration }}
+      vus: ${{ inputs.vus }}
+      write: ${{ inputs.write }}

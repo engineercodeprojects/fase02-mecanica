@@ -1,0 +1,30 @@
+name: Performance nightly
+
+# US-F2-11. Regressao de performance NOTURNA (nao por-PR, para nao atrasar o
+# ci-cd.yml). Roda smoke + um load curto toda madrugada contra a app em docker,
+# reusando perf-run.yml. Falha do SLO reprova o run (visivel na aba Actions).
+#
+# O disparo manual (workflow_dispatch) existe so para testar o agendamento.
+
+on:
+  schedule:
+    - cron: '0 4 * * *' # 04:00 UTC diariamente (schedule roda no branch default)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  perf:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - test_type: smoke
+            duration: ''
+          - test_type: load
+            duration: '2m' # noturno curto para nao gastar minutos de runner demais
+    uses: ./.github/workflows/perf-run.yml
+    with:
+      test_type: ${{ matrix.test_type }}
+      duration: ${{ matrix.duration }}

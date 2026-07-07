@@ -1,0 +1,286 @@
+name: Performance (reusable)
+
+# Workflow reutilizavel (workflow_call) com a logica de execucao dos testes de
+# performance/escalabilidade (US-F2-11). Chamado por:
+#   - perf-test.yml   (workflow_dispatch — sob demanda, escolhe o test_type)
+#   - perf-nightly.yml (schedule — smoke + load curtos toda madrugada)
+#
+# NAO roda no push/PR padrao para nao deixar o ci-cd.yml (<10min) lento.
+
+on:
+  workflow_call:
+    inputs:
+      test_type:
+        description: 'smoke|load|stress|spike|soak|throttler|hpa'
+        type: string
+        default: smoke
+      duration:
+        description: 'Override de duracao (ex: 2m). Vazio = default do script.'
+        type: string
+        default: ''
+      vus:
+        description: 'Override de VUs. Vazio = default do script.'
+        type: string
+        default: ''
+      write:
+        description: 'Incluir trafego de escrita (cria OS) no load'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  # Secret de teste (nao-placeholder). NAO usar em producao.
+  JWT_SECRET: ci-perf-secret-not-for-prod-0123456789abcdef
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # HTTP perf (smoke/load/stress/spike/soak/throttler) contra a app em docker.
+  # ---------------------------------------------------------------------------
+  http-perf:
+    name: "HTTP perf (${{ inputs.test_type }})"
+    if: ${{ inputs.test_type != 'hpa' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Subir app-alvo (docker compose)
+        env:
+          # Throttler DESLIGADO para os cenarios de performance; LIGADO so no
+          # teste anti-DoS (throttler.js), que precisa provocar 429.
+          THROTTLER_DISABLED: ${{ inputs.test_type == 'throttler' && 'false' || 'true' }}
+        run: |
+          docker compose up -d --build postgres app
+          echo "==> Aguardando /health responder 200..."
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:3000/health >/dev/null 2>&1; then
+              echo "app pronta"; break
+            fi
+            sleep 5
+            [ "$i" = "60" ] && { echo "app nao subiu"; docker compose logs app; exit 1; }
+          done
+
+      - name: Semear usuarios/dados de teste
+        run: |
+          DATABASE_URL="postgresql://postgres:postgres@localhost:5432/oficina_mecanica?schema=public" \
+            npm run seed
+
+      - name: Setup k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: Rodar k6 (${{ inputs.test_type }})
+        run: |
+          mkdir -p perf-results
+          ARGS=(-e "BASE_URL=http://localhost:3000")
+          [ -n "${{ inputs.duration }}" ] && ARGS+=(-e "DURATION=${{ inputs.duration }}")
+          [ -n "${{ inputs.vus }}" ]      && ARGS+=(-e "VUS=${{ inputs.vus }}")
+          [ "${{ inputs.write }}" = "true" ] && ARGS+=(-e "PERF_WRITE=1")
+          echo "k6 run perf/${{ inputs.test_type }}.js ${ARGS[*]}"
+          k6 run "perf/${{ inputs.test_type }}.js" "${ARGS[@]}"
+
+      - name: Resumo no job summary
+        if: always()
+        run: |
+          f="perf-results/${{ inputs.test_type }}-summary.json"
+          if [ -f "$f" ]; then
+            {
+              echo "## Performance — ${{ inputs.test_type }}"
+              echo ""
+              echo "| Metrica | Valor |"
+              echo "|---|---|"
+              jq -r '.summary | to_entries[] | select(.value|type != "object") | "| \(.key) | \(.value) |"' "$f"
+              echo ""
+              echo "**Latencia (ms):**"
+              echo ""
+              echo "| | p95 | p99 |"
+              echo "|---|---|---|"
+              jq -r '.summary.latency | "| read | \(.read_p95 // "n/a") | \(.read_p99 // "n/a") |\n| write | \(.write_p95 // "n/a") | \(.write_p99 // "n/a") |"' "$f"
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Sem summary.json (o k6 pode ter abortado no setup)." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Logs da app (em caso de falha)
+        if: failure()
+        run: docker compose logs app > perf-results/app.log 2>&1 || true
+
+      - name: Upload artefatos
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-${{ inputs.test_type }}
+          path: perf-results/
+          if-no-files-found: warn
+
+  # ---------------------------------------------------------------------------
+  # Escalabilidade / HPA em kind efemero (self-contained ate US-F2-05 fornecer
+  # k8s/ canonico; namespace/deployment/HPA = oficina/app, adaptados ao runner).
+  # ---------------------------------------------------------------------------
+  hpa-scale:
+    name: "Escalabilidade HPA (kind)"
+    if: ${{ inputs.test_type == 'hpa' }}
+    runs-on: ubuntu-latest
+    env:
+      NS: oficina
+      IMAGE: oficina-app:perf
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build imagem da app
+        run: docker build -t "$IMAGE" .
+
+      - name: Criar cluster kind
+        uses: helm/kind-action@v1.11.0
+        with:
+          cluster_name: perf-cluster
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Carregar imagem no kind
+        run: kind load docker-image "$IMAGE" --name perf-cluster
+
+      - name: Deploy Postgres + app + HPA
+        run: |
+          kubectl create namespace "$NS" || true
+          # Postgres (efemero) — /health/ready faz SELECT 1, nao precisa de schema.
+          kubectl apply -n "$NS" -f - <<'EOF'
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata: { name: postgres, labels: { app: postgres } }
+          spec:
+            replicas: 1
+            selector: { matchLabels: { app: postgres } }
+            template:
+              metadata: { labels: { app: postgres } }
+              spec:
+                containers:
+                - name: postgres
+                  image: postgres:16-alpine
+                  env:
+                  - { name: POSTGRES_USER, value: postgres }
+                  - { name: POSTGRES_PASSWORD, value: postgres }
+                  - { name: POSTGRES_DB, value: oficina_mecanica }
+                  ports: [ { containerPort: 5432 } ]
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata: { name: postgres }
+          spec:
+            selector: { app: postgres }
+            ports: [ { port: 5432, targetPort: 5432 } ]
+          EOF
+          kubectl rollout status deployment/postgres -n "$NS" --timeout=120s
+
+          # App: requests.cpu baixo (denominador do HPA), THROTTLER_DISABLED=true,
+          # HPA CPU 70% min=1 max=4 (adaptado ao runner; canonico US-F2-05 = 2/10).
+          kubectl apply -n "$NS" -f - <<EOF
+          apiVersion: v1
+          kind: Secret
+          metadata: { name: app-secrets }
+          type: Opaque
+          stringData:
+            DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/oficina_mecanica?schema=public"
+            JWT_SECRET: "${JWT_SECRET}"
+          ---
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata: { name: app, labels: { app: app } }
+          spec:
+            replicas: 1
+            selector: { matchLabels: { app: app } }
+            template:
+              metadata: { labels: { app: app } }
+              spec:
+                containers:
+                - name: app
+                  image: ${IMAGE}
+                  imagePullPolicy: IfNotPresent
+                  ports: [ { containerPort: 3000 } ]
+                  env:
+                  - { name: THROTTLER_DISABLED, value: "true" }
+                  - name: DATABASE_URL
+                    valueFrom: { secretKeyRef: { name: app-secrets, key: DATABASE_URL } }
+                  - name: JWT_SECRET
+                    valueFrom: { secretKeyRef: { name: app-secrets, key: JWT_SECRET } }
+                  resources:
+                    requests: { cpu: "100m", memory: "128Mi" }
+                    limits: { cpu: "500m", memory: "512Mi" }
+                  readinessProbe:
+                    httpGet: { path: /health/ready, port: 3000 }
+                    initialDelaySeconds: 10
+                    periodSeconds: 5
+                  livenessProbe:
+                    httpGet: { path: /health, port: 3000 }
+                    initialDelaySeconds: 15
+                    periodSeconds: 10
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata: { name: app }
+          spec:
+            selector: { app: app }
+            ports: [ { port: 3000, targetPort: 3000 } ]
+          ---
+          apiVersion: autoscaling/v2
+          kind: HorizontalPodAutoscaler
+          metadata: { name: app }
+          spec:
+            scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: app }
+            minReplicas: 1
+            maxReplicas: 4
+            metrics:
+            - type: Resource
+              resource: { name: cpu, target: { type: Utilization, averageUtilization: 70 } }
+          EOF
+          kubectl rollout status deployment/app -n "$NS" --timeout=180s
+
+      - name: Instalar metrics-server e aguardar HPA
+        run: K8S_NAMESPACE="$NS" K8S_HPA=app bash perf/scripts/install-metrics-server.sh
+
+      - name: Setup k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: Port-forward da app
+        run: |
+          kubectl port-forward -n "$NS" svc/app 8080:3000 >/tmp/pf.log 2>&1 &
+          for _ in $(seq 1 30); do
+            curl -fsS http://localhost:8080/health >/dev/null 2>&1 && break
+            sleep 2
+          done
+
+      - name: Teste de escalabilidade (scale-up + scale-down)
+        env:
+          BASE_URL: http://localhost:8080
+          K8S_NAMESPACE: oficina
+          K8S_DEPLOYMENT: app
+          K8S_HPA: app
+          HPA_MIN_SCALE: '2'
+          HPA_SCALEUP_TIMEOUT: '300'
+          RATE: '400'
+          DURATION: '6m'
+        run: bash perf/scripts/hpa-scale-test.sh
+
+      - name: Diagnostico (em caso de falha)
+        if: failure()
+        run: |
+          mkdir -p perf-results
+          kubectl describe hpa app -n "$NS" > perf-results/hpa-describe.log 2>&1 || true
+          kubectl get pods -n "$NS" -o wide >> perf-results/hpa-describe.log 2>&1 || true
+          kubectl logs -n "$NS" -l app=app --tail=200 > perf-results/app.log 2>&1 || true
+
+      - name: Upload artefatos
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-hpa
+          path: perf-results/
+          if-no-files-found: warn
