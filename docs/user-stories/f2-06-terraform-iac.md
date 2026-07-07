@@ -4,60 +4,61 @@
 
 **Prioridade:** Alta
 **Story Points:** 8
-**Status:** To Do
+**Status:** In Review
 **DDD Domain:** Infraestrutura
 **DDD Layer:** Infrastructure
 
 ## Contexto
 
-O PDF da Fase 2 exige explicitamente Terraform para **cluster Kubernetes (local ou cloud) e banco de dados**. Por isso o Postgres NAO esta nos manifestos K8s (ver [US-F2-05](f2-05-manifestos-kubernetes.md)) — fica sob responsabilidade do Terraform, mantendo separacao entre provisioning (IaC) e application deploy (manifestos).
+O PDF da Fase 2 exige explicitamente Terraform para **cluster Kubernetes e banco de dados**. Por isso o Postgres NAO esta nos manifestos K8s (ver [US-F2-05](f2-05-manifestos-kubernetes.md)) — fica sob responsabilidade do Terraform, mantendo separacao entre provisioning (IaC) e application deploy (manifestos).
 
-## Estrategia: dois modos
+## Estrategia: cluster kind (sem cloud)
 
-| Modo | Cluster | Banco |
-|---|---|---|
-| **Local (default)** | `kind` cluster via provider `tehcyx/kind` | Postgres via Helm chart (`bitnami/postgresql`) ou recursos `kubernetes_*` dentro do cluster |
-| **Cloud (AWS)** | EKS via modulo `terraform-aws-modules/eks` | RDS Postgres via `aws_db_instance` |
+O escopo e **apenas `kind`** (Kubernetes in Docker). Nao ha provisionamento em cloud (EKS/RDS): o fluxo de entrega/CD sobe um cluster `kind` efemero, faz o deploy da app e valida que o servidor sobe (smoke test). `kind` e um cluster Kubernetes real, entao atende literalmente o requisito "deploy no cluster Kubernetes".
 
-Selecao via variavel `cloud_provider = "local" \| "aws"`.
+| Componente | Como |
+|---|---|
+| Cluster | `kind` via provider `tehcyx/kind` (nao precisa do binario `kind`) |
+| Banco | PostgreSQL no cluster via recursos `kubernetes_*` com a imagem oficial `postgres:16-alpine` |
+
+> Helm `bitnami/postgresql` foi descartado: desde set/2025 a Bitnami moveu as imagens versionadas para `bitnamilegacy`/assinatura paga e o chart nao funciona out-of-the-box.
+
+**Arquitetura de dois estados** (recomendacao HashiCorp para nao configurar o provider `kubernetes` a partir de um recurso criado no mesmo apply):
+
+- `infra/terraform/01-cluster/` — cria o cluster `kind` e grava o kubeconfig
+- `infra/terraform/02-app/` — namespace + Postgres + Secret `oficina-db` (consome o kubeconfig via `config_path`)
 
 ## Criterios de Aceite
 
 ### Estrutura
 
-- [ ] Diretorio `infra/terraform/` (nao conflitar com `infra/sonar/` atual)
-- [ ] `main.tf`, `variables.tf`, `outputs.tf`, `versions.tf` separados
-- [ ] `terraform.tfvars.example` documenta as variaveis necessarias
+- [x] Diretorio `infra/terraform/` (nao conflita com `infra/sonar/`)
+- [x] Arquivos separados por responsabilidade (`versions.tf`, `providers.tf`, `variables.tf`, `locals.tf`, `cluster.tf`/`database.tf`/`main.tf`, `outputs.tf`) em cada stage
+- [x] `terraform.tfvars.example` em cada stage documenta as variaveis
 
 ### Provisioning do cluster
 
-- [ ] Modo **local**: provisiona cluster `kind` (1 control-plane + 1+ workers)
-- [ ] Modo **cloud**: provisiona EKS minimo (1 node group `t3.small`)
-- [ ] Gera kubeconfig automaticamente e expoe como output
+- [x] Provisiona cluster `kind` (1 control-plane + N workers, default 2)
+- [x] Gera kubeconfig automaticamente e expoe como output (`kubeconfig_path`)
 
 ### Provisioning do banco de dados
 
-- [ ] Modo **local**: instala PostgreSQL no cluster (via Helm provider apontando para chart `bitnami/postgresql`, ou via `kubernetes_*` resources)
-- [ ] Modo **cloud**: cria RDS PostgreSQL (`aws_db_instance` com `db.t3.micro`, single-AZ, sem backup automatizado — apenas demo)
-- [ ] Banco com: usuario, senha (random_password), database name configuraveis
-- [ ] Senha gerada pelo Terraform (`random_password`) e gravada em `kubernetes_secret` no namespace da app — a app consome de la
-- [ ] `DATABASE_URL` montada e exposta como output (mascarada) e como Secret K8s
+- [x] Instala PostgreSQL no cluster via `kubernetes_*` resources (`postgres:16-alpine`) + PVC
+- [x] Banco com usuario, senha e database name configuraveis
+- [x] Senha gerada pelo Terraform (`random_password`, com override opcional) e gravada em `kubernetes_secret` (`oficina-db`) no namespace da app — a app consome de la
+- [x] `DATABASE_URL` montada e exposta como output mascarado (sensitive) e como Secret K8s
 
 ### Outputs
 
-- [ ] `kubeconfig_path` — caminho para configurar kubectl
-- [ ] `database_endpoint` — endpoint do DB (Service DNS local ou RDS endpoint)
-- [ ] `app_namespace` — namespace onde a app deve ser deployada
-- [ ] Comando pronto para o usuario: `aws eks update-kubeconfig ...` (modo cloud) ou `kubectl cluster-info --context kind-...` (local)
+- [x] `kubeconfig_path` — caminho para configurar kubectl
+- [x] `database_endpoint` — Service DNS interno do banco
+- [x] `app_namespace` — namespace onde a app deve ser deployada
+- [x] `connect_command` — comando pronto (`export KUBECONFIG=... && kubectl cluster-info --context kind-...`)
 
 ### Qualidade e documentacao
 
-- [ ] `terraform fmt -check` e `terraform validate` rodam sem erro
-- [ ] `infra/terraform/README.md` descreve:
-  - O que cada recurso cria (cluster, DB, secret, namespace)
-  - Pre-requisitos por modo (Docker para local; AWS CLI/credenciais para cloud)
-  - Como aplicar: `terraform init && terraform plan && terraform apply -var="cloud_provider=local"`
-  - Como destruir: `terraform destroy`
-  - Diagrama simples do que e criado
-- [ ] `.gitignore` cobre `*.tfstate*`, `.terraform/`, `*.tfvars` (mantendo `*.tfvars.example`)
-- [ ] Ordem de aplicacao documentada: **(1) Terraform apply → (2) kubectl apply -k k8s/ → (3) Job de migrations roda**
+- [x] `terraform fmt -check` e `terraform validate` rodam sem erro (ambos os stages)
+- [x] `infra/terraform/README.md` descreve recursos, pre-requisitos, apply/destroy, diagrama e o contrato do Secret
+- [x] `.gitignore` cobre `*.tfstate*`, `.terraform/`, `*.tfvars` (mantendo `*.tfvars.example`)
+- [x] Ordem de aplicacao documentada: **(1) Terraform apply 01 → 02 → (2) kubectl apply -k k8s/ → (3) Job de migrations roda**
+- [x] Validado ao vivo em `kind`: apply provisiona cluster + Postgres + Secret; `DATABASE_URL` conecta de fato; destroy limpo
