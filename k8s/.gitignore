@@ -1,0 +1,3 @@
+# O Secret real da aplicacao nunca vai para o versionamento — apenas o template
+# secret.yaml.example e commitado.
+secret.yaml

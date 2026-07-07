@@ -1,0 +1,21 @@
+# Service ClusterIP: expoe a API dentro do cluster (porta 3000).
+# Para acessar de fora em kind, use `kubectl port-forward svc/oficina-app 3000:3000 -n oficina`.
+apiVersion: v1
+kind: Service
+metadata:
+  name: oficina-app
+  labels:
+    app.kubernetes.io/name: oficina-app
+    app.kubernetes.io/part-of: oficina-mecanica
+    app.kubernetes.io/component: api
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: oficina-app
+    app.kubernetes.io/component: api
+  ports:
+    - name: http
+      protocol: TCP
+      port: 3000
+      targetPort: http

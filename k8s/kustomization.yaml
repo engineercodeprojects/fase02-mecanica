@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Todos os recursos vao para o namespace `oficina` (mesmo do Secret oficina-db
+# gerado pelo Terraform). O kustomize nao aplica namespace em recursos
+# cluster-scoped, entao o Namespace abaixo permanece intacto.
+namespace: oficina
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  # Copie de secret.yaml.example (ver README). NAO commitado (k8s/.gitignore).
+  - secret.yaml
+  - migrations-job.yaml
+  - app/deployment.yaml
+  - app/service.yaml
+  - app/hpa.yaml
+
+# Fonte unica da imagem para o Deployment e o Job de migrations.
+# Override sem editar manifesto:
+#   kubectl apply -k k8s/  (usa o default abaixo, apos `kind load docker-image`)
+#   ou   kustomize edit set image oficina-mecanica-app=ghcr.io/<owner>/<repo>:<tag>
+images:
+  - name: oficina-mecanica-app
+    newName: oficina-mecanica-app
+    newTag: latest

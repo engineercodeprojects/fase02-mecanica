@@ -1,0 +1,12 @@
+# Namespace dedicado da aplicacao.
+#
+# O Terraform (US-F2-06, stage 02-app) tambem cria este namespace ao provisionar
+# o banco. Como `kubectl apply` e idempotente, aplicar este manifesto sobre um
+# namespace ja existente e um no-op — mantemos o arquivo porque os manifestos
+# devem ser auto-suficientes tambem em clusters onde o DB veio de fora (RDS).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: oficina
+  labels:
+    app.kubernetes.io/part-of: oficina-mecanica
