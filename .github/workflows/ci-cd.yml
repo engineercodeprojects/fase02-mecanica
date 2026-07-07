@@ -162,8 +162,11 @@ jobs:
         uses: azure/setup-kubectl@v4
 
       - name: Install kind CLI
+        # A versao DEVE casar com o kind embutido no provider tehcyx/kind (v0.11.0
+        # empacota sigs.k8s.io/kind v0.31.0). Um CLI mais antigo falha no
+        # `kind load` com "failed to detect containerd snapshotter".
         run: |
-          curl -sSLo ./kind https://kind.sigs.k8s.io/dl/v0.24.0/kind-linux-amd64
+          curl -sSLo ./kind https://kind.sigs.k8s.io/dl/v0.31.0/kind-linux-amd64
           chmod +x ./kind && sudo mv ./kind /usr/local/bin/kind
           kind version
 
