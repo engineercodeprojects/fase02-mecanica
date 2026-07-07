@@ -37,6 +37,10 @@ spec:
     spec:
       securityContext:
         runAsNonRoot: true
+        # uid 1000 = usuario `node` da imagem. Aplicado ao pod inteiro para que
+        # o initContainer busybox (sem USER proprio) tambem rode como nao-root e
+        # nao caia em CreateContainerConfigError sob runAsNonRoot.
+        runAsUser: 1000
         seccompProfile:
           type: RuntimeDefault
       # Evita crashloop enquanto o Postgres ainda nao aceita conexao.

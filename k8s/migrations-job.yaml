@@ -53,6 +53,9 @@ spec:
       containers:
         - name: migrate
           image: oficina-mecanica-app:latest
+          # :latest defaultaria para Always, ignorando a imagem carregada via
+          # `kind load` (nao esta em registry) -> ImagePullBackOff. Igual ao Deployment.
+          imagePullPolicy: IfNotPresent
           command: ["npx", "prisma", "migrate", "deploy"]
           env:
             - name: DATABASE_URL
