@@ -1,9 +1,14 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { validateEnv } from './config/env.validation';
+import {
+  THROTTLER_LIMIT,
+  THROTTLER_TTL_MS,
+  shouldSkipThrottling,
+} from './config/throttler.config';
 import { HealthModule } from './health/health.module';
 import { SharedModule } from './shared/shared.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -15,17 +20,19 @@ import { VeiculoModule } from './veiculo/veiculo.module';
 import { OrdemDeServicoModule } from './ordem-de-servico/ordem-de-servico.module';
 import { UsuarioModule } from './usuario/usuario.module';
 import { NotificacaoModule } from './notificacao/notificacao.module';
+import { CorrelationIdInterceptor } from './shared/infrastructure/correlation-id.interceptor';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
     EventEmitterModule.forRoot(),
     // Rate limiting global (anti brute-force/DoS). Desabilitado sob jest
-    // (JEST_WORKER_ID) para nao introduzir flakiness por 429 nos testes e2e.
+    // (JEST_WORKER_ID) para nao introduzir flakiness por 429 nos testes e2e, e
+    // sob THROTTLER_DISABLED=true para os testes de carga (US-F2-11) medirem a
+    // app, nao o throttler. Ver src/config/throttler.config.ts.
     ThrottlerModule.forRoot({
-      throttlers: [{ ttl: 60000, limit: 100 }],
-      skipIf: () =>
-        process.env.NODE_ENV === 'test' || !!process.env.JEST_WORKER_ID,
+      throttlers: [{ ttl: THROTTLER_TTL_MS, limit: THROTTLER_LIMIT }],
+      skipIf: () => shouldSkipThrottling(),
     }),
     SharedModule,
     PrismaModule,
@@ -39,6 +46,9 @@ import { NotificacaoModule } from './notificacao/notificacao.module';
     OrdemDeServicoModule,
     NotificacaoModule,
   ],
-  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
+  providers: [
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_INTERCEPTOR, useClass: CorrelationIdInterceptor },
+  ],
 })
 export class AppModule {}

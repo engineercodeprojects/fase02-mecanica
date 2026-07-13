@@ -16,6 +16,9 @@ build/
 # Test coverage
 coverage
 
+# Performance test results (US-F2-11)
+perf-results/
+
 # Logs
 *.log
 npm-debug.log*

@@ -28,11 +28,21 @@ services:
       PORT: '${PORT:-3000}'
       JWT_SECRET: '${JWT_SECRET:?JWT_SECRET is required — set it in .env or your shell env}'
       JWT_EXPIRES_IN: '${JWT_EXPIRES_IN:-1h}'
+      # Testes de carga (US-F2-11): subir com THROTTLER_DISABLED=true para o k6
+      # medir a app, nao o rate limiter. Vazio por padrao = throttler ativo.
+      THROTTLER_DISABLED: '${THROTTLER_DISABLED:-}'
+      WEBHOOK_APPROVAL_TOKEN: '${WEBHOOK_APPROVAL_TOKEN:-}'
       PUBLIC_BASE_URL: '${PUBLIC_BASE_URL:-http://localhost:3000}'
       WEB_ORIGINS: '${WEB_ORIGINS:-http://localhost:5173,http://localhost:5174,http://localhost:8080,http://localhost:8081}'
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:3000/health || exit 1']
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
     entrypoint: ['sh', '-c', 'npx prisma migrate deploy && exec node dist/main.js']
 
   web-admin:
@@ -45,7 +55,8 @@ services:
     ports:
       - '8080:8080'
     depends_on:
-      - app
+      app:
+        condition: service_healthy
 
   web-cliente:
     build:
@@ -57,7 +68,8 @@ services:
     ports:
       - '8081:8080'
     depends_on:
-      - app
+      app:
+        condition: service_healthy
 
 volumes:
   pgdata:

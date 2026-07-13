@@ -11,6 +11,7 @@ import {
   OrdemDeServicoGateway,
 } from '../gateways/ordem-de-servico.gateway';
 import { carregarOrdemOuFalhar } from './carregar-ordem';
+import { publicarMudancaDeStatus } from './publicar-mudanca-de-status';
 
 export interface FinalizarExecucaoInput {
   id: string;
@@ -29,8 +30,11 @@ export class FinalizarExecucaoUseCase
 
   async execute(input: FinalizarExecucaoInput): Promise<OrdemDeServico> {
     const ordem = await carregarOrdemOuFalhar(this.gateway, input.id);
+    const statusAnterior = ordem.status;
     ordem.finalizarExecucao();
     const updated = await this.gateway.update(ordem);
+
+    publicarMudancaDeStatus(this.events, updated, statusAnterior);
 
     this.events.publish(
       new OsFinalizadaEvent(updated.id!, updated.numero, updated.clienteId),

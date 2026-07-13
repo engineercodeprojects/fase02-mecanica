@@ -1,6 +1,6 @@
-import { OrdemDeServico } from './ordem-de-servico.entity';
+import { OrdemDeServico } from "./ordem-de-servico.entity";
 
-export const ORDEM_DE_SERVICO_REPOSITORY = 'ORDEM_DE_SERVICO_REPOSITORY';
+export const ORDEM_DE_SERVICO_REPOSITORY = "ORDEM_DE_SERVICO_REPOSITORY";
 
 export interface FindAllParams {
   page?: number;
@@ -8,6 +8,7 @@ export interface FindAllParams {
   clienteId?: string;
   status?: string;
   numero?: string;
+  incluirEncerradas?: boolean;
 }
 
 export interface PaginatedResult<T> {

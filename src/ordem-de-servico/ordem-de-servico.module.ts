@@ -12,8 +12,15 @@ import { PRODUTO_REPOSITORY } from '../produto/domain/produto.repository';
 import { USUARIO_REPOSITORY } from '../usuario/domain/usuario.repository';
 import { OrdemDeServicoController } from './infrastructure/ordem-de-servico.controller';
 import { ClienteOrdemDeServicoController } from './infrastructure/cliente-ordem-de-servico.controller';
+import { WebhookAprovacaoController } from './infrastructure/webhook-aprovacao.controller';
+import { WebhookTokenGuard } from './infrastructure/guards/webhook-token.guard';
 import { PrismaOrdemDeServicoRepository } from './infrastructure/prisma-ordem-de-servico.repository';
+import { PrismaAuditLogRepository } from './infrastructure/prisma-audit-log.repository';
 import { ORDEM_DE_SERVICO_REPOSITORY } from './domain/ordem-de-servico.repository';
+import { AUDIT_LOG_REPOSITORY } from './domain/audit-log.repository';
+import { AuditLogService } from './application/audit-log.service';
+import { OsAuditListener } from './application/listeners/os-audit.listener';
+import { OsEstoqueListener } from './application/listeners/os-estoque.listener';
 import { ORDEM_DE_SERVICO_GATEWAY } from './application/gateways/ordem-de-servico.gateway';
 import {
   CLIENTE_CONSULTA_GATEWAY,
@@ -22,6 +29,8 @@ import {
   USUARIO_CONSULTA_GATEWAY,
   VEICULO_CONSULTA_GATEWAY,
 } from './application/gateways/consulta.gateways';
+import { ESTOQUE_MOVIMENTO_GATEWAY } from './application/gateways/estoque-movimento.gateway';
+import { EstoqueMovimentoOsAdapter } from './infrastructure/estoque-movimento-os.adapter';
 import { CriarOrdemDeServicoUseCase } from './application/use-cases/criar-ordem-de-servico.use-case';
 import { ListarOrdensDeServicoUseCase } from './application/use-cases/listar-ordens-de-servico.use-case';
 import { ObterTempoMedioExecucaoUseCase } from './application/use-cases/obter-tempo-medio-execucao.use-case';
@@ -73,27 +82,48 @@ const USE_CASES = [
     ProdutoModule,
     UsuarioModule,
   ],
-  controllers: [OrdemDeServicoController, ClienteOrdemDeServicoController],
+  controllers: [
+    OrdemDeServicoController,
+    ClienteOrdemDeServicoController,
+    WebhookAprovacaoController,
+  ],
   providers: [
     ...USE_CASES,
+    AuditLogService,
+    OsAuditListener,
+    OsEstoqueListener,
+    WebhookTokenGuard,
+    // Estoque: adapter que delega aos use cases de ProdutoModule + porta.
+    EstoqueMovimentoOsAdapter,
+    {
+      provide: ESTOQUE_MOVIMENTO_GATEWAY,
+      useExisting: EstoqueMovimentoOsAdapter,
+    },
     // Persistencia: o adapter Prisma satisfaz a porta de repositorio e o gateway.
     PrismaOrdemDeServicoRepository,
+    PrismaAuditLogRepository,
     {
       provide: ORDEM_DE_SERVICO_REPOSITORY,
       useExisting: PrismaOrdemDeServicoRepository,
     },
     {
+      provide: AUDIT_LOG_REPOSITORY,
+      useExisting: PrismaAuditLogRepository,
+    },
+    {
       provide: ORDEM_DE_SERVICO_GATEWAY,
       useExisting: PrismaOrdemDeServicoRepository,
     },
-    // Gateways de consulta a outros contextos: ligados aos repositorios Prisma
-    // ja existentes (importados via seus modulos).
     { provide: CLIENTE_CONSULTA_GATEWAY, useExisting: CLIENTE_REPOSITORY },
     { provide: VEICULO_CONSULTA_GATEWAY, useExisting: VEICULO_REPOSITORY },
     { provide: SERVICO_CONSULTA_GATEWAY, useExisting: SERVICO_REPOSITORY },
     { provide: PRODUTO_CONSULTA_GATEWAY, useExisting: PRODUTO_REPOSITORY },
     { provide: USUARIO_CONSULTA_GATEWAY, useExisting: USUARIO_REPOSITORY },
   ],
-  exports: [ORDEM_DE_SERVICO_REPOSITORY, ORDEM_DE_SERVICO_GATEWAY],
+  exports: [
+    ORDEM_DE_SERVICO_REPOSITORY,
+    ORDEM_DE_SERVICO_GATEWAY,
+    AuditLogService,
+  ],
 })
 export class OrdemDeServicoModule {}

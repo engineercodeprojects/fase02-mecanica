@@ -5,8 +5,10 @@ import {
 } from '../../../cliente/domain/cliente.repository';
 import { PUBLIC_BASE_URL } from '../ports/public-base-url';
 import { Cliente } from '../../../cliente/domain/cliente.entity';
-import { OrcamentoProntoEvent } from '../../../ordem-de-servico/domain/events/orcamento-pronto.event';
-import { OsFinalizadaEvent } from '../../../ordem-de-servico/domain/events/os-finalizada.event';
+import { OrcamentoProntoEvent } from '../../../shared/domain/events/orcamento-pronto.event';
+import { OsFinalizadaEvent } from '../../../shared/domain/events/os-finalizada.event';
+import { OsStatusAlteradoEvent } from '../../../ordem-de-servico/domain/events/os-status-alterado.event';
+import { StatusOS } from '../../../ordem-de-servico/domain/value-objects/status-os.vo';
 import { CanalNotificacao } from '../../domain/value-objects/canal-notificacao.vo';
 import { TipoNotificacao } from '../../domain/value-objects/tipo-notificacao.vo';
 import { EnviarNotificacaoUseCase } from '../use-cases/enviar-notificacao.use-case';
@@ -145,6 +147,71 @@ describe('OrdemDeServicoNotificacaoListener', () => {
       clienteRepository.findById.mockRejectedValueOnce(new Error('db down'));
 
       await expect(listener.onOsFinalizada(event)).resolves.toBeUndefined();
+    });
+  });
+
+  describe('onOsStatusAlterado', () => {
+    const event = new OsStatusAlteradoEvent(
+      'os-id-3',
+      'OS-2026-003',
+      'cliente-1',
+      StatusOS.AGUARDANDO_APROVACAO,
+      StatusOS.EM_EXECUCAO,
+      new Date('2026-06-25T10:00:00.000Z'),
+    );
+
+    it('envia notificacao com status anterior, status atual e timestamp', async () => {
+      clienteRepository.findById.mockResolvedValueOnce(clienteComEmail);
+
+      await listener.onOsStatusAlterado(event);
+
+      expect(enviarNotificacao.execute).toHaveBeenCalledTimes(1);
+      expect(enviarNotificacao.execute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          clienteId: 'cliente-1',
+          ordemDeServicoId: 'os-id-3',
+          tipo: TipoNotificacao.STATUS_OS_ALTERADO,
+          canal: CanalNotificacao.EMAIL,
+          destinatario: 'joao@email.com',
+          statusAnterior: StatusOS.AGUARDANDO_APROVACAO,
+          statusAtual: StatusOS.EM_EXECUCAO,
+          timestamp: new Date('2026-06-25T10:00:00.000Z'),
+        }),
+      );
+    });
+
+    it.each([StatusOS.AGUARDANDO_APROVACAO, StatusOS.FINALIZADA])(
+      'nao envia notificacao generica quando o status %s ja possui notificacao dedicada',
+      async (statusAtual) => {
+        const eventoDedicado = new OsStatusAlteradoEvent(
+          'os-id-4',
+          'OS-2026-004',
+          'cliente-1',
+          StatusOS.EM_EXECUCAO,
+          statusAtual,
+          new Date('2026-06-25T10:00:00.000Z'),
+        );
+
+        await listener.onOsStatusAlterado(eventoDedicado);
+
+        expect(enviarNotificacao.execute).not.toHaveBeenCalled();
+        expect(clienteRepository.findById).not.toHaveBeenCalled();
+      },
+    );
+
+    it('usa clienteId como destinatario quando cliente nao tem email', async () => {
+      clienteRepository.findById.mockResolvedValueOnce(clienteSemEmail);
+
+      await listener.onOsStatusAlterado(event);
+
+      const arg = enviarNotificacao.execute.mock.calls[0][0];
+      expect(arg.destinatario).toBe('cliente-1');
+    });
+
+    it('engole erros para nao bloquear fluxo principal', async () => {
+      clienteRepository.findById.mockRejectedValueOnce(new Error('db down'));
+
+      await expect(listener.onOsStatusAlterado(event)).resolves.toBeUndefined();
     });
   });
 });

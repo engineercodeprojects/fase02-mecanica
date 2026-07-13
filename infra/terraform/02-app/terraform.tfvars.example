@@ -1,0 +1,11 @@
+# Stage 02 — App: exemplo de variaveis. Copie para terraform.tfvars
+# (nao versionado).
+
+project_name    = "oficina-mecanica"
+app_namespace   = "oficina"
+db_name         = "oficina_mecanica"
+db_username     = "oficina"
+kubeconfig_path = "~/.kube/oficina-mecanica.config"
+# db_password   = ""            # vazio => gerada via random_password
+# postgres_image  = "postgres:16-alpine"
+# pg_storage_size = "1Gi"

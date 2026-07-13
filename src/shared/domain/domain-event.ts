@@ -1,8 +1,16 @@
 /**
- * Contrato minimo de um evento de dominio. Cada evento expoe seu nome estavel
- * (`eventName`), usado pelo publisher para roteamento, sem acoplar a aplicacao
- * a nenhum framework de eventos.
+ * Base class para eventos de dominio que cruzam bounded contexts.
+ *
+ * Cada evento expoe `eventName`, usado pelo publisher para roteamento, e
+ * `occurredAt`, usado para rastreabilidade sem acoplar dominio a framework.
  */
-export interface DomainEvent {
-  readonly eventName: string;
+export abstract class DomainEvent {
+  abstract readonly eventName: string;
+
+  /** Timestamp em que o evento foi disparado (UTC) */
+  readonly occurredAt?: Date;
+
+  constructor() {
+    this.occurredAt = new Date();
+  }
 }

@@ -17,6 +17,9 @@ export interface EnviarNotificacaoInput {
   destinatario: string;
   assunto: string;
   mensagem: string;
+  statusAnterior?: string;
+  statusAtual?: string;
+  timestamp?: Date | string;
 }
 
 @Injectable()
@@ -67,6 +70,14 @@ export class EnviarNotificacaoUseCase
         destinatario: input.destinatario,
         assunto: input.assunto,
         corpo: input.mensagem,
+        contexto: {
+          ordemId: input.ordemDeServicoId,
+          clienteId: input.clienteId,
+          statusAnterior: input.statusAnterior,
+          statusAtual: input.statusAtual,
+          timestamp: input.timestamp,
+          tipoNotificacao: input.tipo,
+        },
       });
       notificacao.marcarComoEnviada();
     } catch (err) {

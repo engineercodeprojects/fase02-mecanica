@@ -46,7 +46,7 @@ describe('OS mutation use cases', () => {
   it('AtribuirMecanico loads, mutates and persists', async () => {
     const os = fakeOs();
     const gateway = gatewayWith(os);
-    await new AtribuirMecanicoUseCase(gateway as any).execute({
+    await new AtribuirMecanicoUseCase(gateway as any, { publish: jest.fn() } as any).execute({
       id: 'os-1',
       usuarioId: 'mec-1',
     });
@@ -57,7 +57,7 @@ describe('OS mutation use cases', () => {
   it('throws NOT_FOUND when the OS does not exist', async () => {
     const gateway = { findById: jest.fn().mockResolvedValue(null) };
     await expect(
-      new AtribuirMecanicoUseCase(gateway as any).execute({
+      new AtribuirMecanicoUseCase(gateway as any, { publish: jest.fn() } as any).execute({
         id: 'nope',
         usuarioId: 'm',
       }),
@@ -115,7 +115,9 @@ describe('OS mutation use cases', () => {
       id: 'os-1',
       servicoId: 's1',
     });
-    await new EntregarOrdemDeServicoUseCase(g as any).execute({ id: 'os-1' });
+    await new EntregarOrdemDeServicoUseCase(g as any, {
+      publish: jest.fn(),
+    } as any).execute({ id: 'os-1' });
     await new RemoverServicoUseCase(g as any).execute({
       id: 'os-1',
       servicoId: 's1',
@@ -131,10 +133,37 @@ describe('OS mutation use cases', () => {
     expect(os.removerProdutoDoServico).toHaveBeenCalledWith('s1', 'p1');
   });
 
-  it('Deletar removes by id', async () => {
-    const os = fakeOs();
+  it('Deletar removes by id (sem estorno quando o estoque ja foi baixado)', async () => {
+    const os = fakeOs(); // EM_EXECUCAO -> estoque ja baixado, nao estorna
     const g = gatewayWith(os);
-    await new DeletarOrdemDeServicoUseCase(g as any).execute({ id: 'os-1' });
+    const estoque = { reservar: jest.fn(), baixar: jest.fn(), liberar: jest.fn() };
+    await new DeletarOrdemDeServicoUseCase(g as any, estoque as any).execute({
+      id: 'os-1',
+    });
+    expect(g.delete).toHaveBeenCalledWith('os-1');
+    expect(estoque.liberar).not.toHaveBeenCalled();
+  });
+
+  it('Deletar estorna as reservas quando a OS ainda tem estoque reservado', async () => {
+    const os = fakeOs({
+      status: 'EM_DIAGNOSTICO',
+      todosOsProdutos: jest.fn(() => [
+        { servicoId: 's1', produto: { produtoId: 'p1', quantidade: 2 } },
+        { servicoId: 's1', produto: { produtoId: 'p2', quantidade: 1 } },
+      ]),
+    });
+    const g = gatewayWith(os);
+    const estoque = {
+      reservar: jest.fn(),
+      baixar: jest.fn(),
+      liberar: jest.fn().mockResolvedValue(undefined),
+    };
+    await new DeletarOrdemDeServicoUseCase(g as any, estoque as any).execute({
+      id: 'os-1',
+    });
+    expect(estoque.liberar).toHaveBeenCalledTimes(2);
+    expect(estoque.liberar).toHaveBeenCalledWith('p1', 2, expect.any(Object));
+    expect(estoque.liberar).toHaveBeenCalledWith('p2', 1, expect.any(Object));
     expect(g.delete).toHaveBeenCalledWith('os-1');
   });
 
@@ -143,7 +172,9 @@ describe('OS mutation use cases', () => {
       const os = fakeOs({ status: 'AGUARDANDO_APROVACAO' });
       const g = gatewayWith(os);
       const clienteGateway = { findById: jest.fn(), findByCpfCnpj: jest.fn() };
-      await new AprovarOrcamentoUseCase(g as any, clienteGateway as any).execute(
+      await new AprovarOrcamentoUseCase(g as any, clienteGateway as any, {
+        publish: jest.fn(),
+      } as any).execute(
         { id: 'os-1' },
       );
       expect(os.aprovar).toHaveBeenCalled();
@@ -158,7 +189,9 @@ describe('OS mutation use cases', () => {
         findByCpfCnpj: jest.fn(),
       };
       await expect(
-        new RejeitarOrcamentoUseCase(g as any, clienteGateway as any).execute({
+        new RejeitarOrcamentoUseCase(g as any, clienteGateway as any, {
+          publish: jest.fn(),
+        } as any).execute({
           id: 'os-1',
           emailClienteAutenticado: 'intruso@x.com',
         }),
@@ -173,7 +206,9 @@ describe('OS mutation use cases', () => {
         findById: jest.fn().mockResolvedValue({ email: 'Dono@x.com' }),
         findByCpfCnpj: jest.fn(),
       };
-      await new AprovarOrcamentoUseCase(g as any, clienteGateway as any).execute(
+      await new AprovarOrcamentoUseCase(g as any, clienteGateway as any, {
+        publish: jest.fn(),
+      } as any).execute(
         { id: 'os-1', emailClienteAutenticado: 'dono@x.com' },
       );
       expect(os.aprovar).toHaveBeenCalled();

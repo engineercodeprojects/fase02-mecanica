@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Logger, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ClienteModule } from '../cliente/cliente.module';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -16,6 +16,9 @@ import { ClienteNotificacaoController } from './infrastructure/cliente-notificac
 import { NotificacaoController } from './infrastructure/notificacao.controller';
 import { MockEmailNotificador } from './infrastructure/mock-notificador.adapter';
 import { PrismaNotificacaoRepository } from './infrastructure/prisma-notificacao.repository';
+import { WebhookNotificador } from './infrastructure/webhook-notificador.adapter';
+
+const logger = new Logger('NotificacaoModule');
 
 @Module({
   imports: [PrismaModule, ClienteModule],
@@ -41,10 +44,30 @@ import { PrismaNotificacaoRepository } from './infrastructure/prisma-notificacao
 
     // Notificadores
     MockEmailNotificador,
+    WebhookNotificador,
     {
       provide: NOTIFICADOR,
-      useFactory: (mockEmail: MockEmailNotificador) => [mockEmail],
-      inject: [MockEmailNotificador],
+      useFactory: (
+        config: ConfigService,
+        mockEmail: MockEmailNotificador,
+        webhook: WebhookNotificador,
+      ) => {
+        const provider = (
+          config.get<string>('NOTIFICATION_PROVIDER') ??
+          (config.get<string>('NODE_ENV') === 'production' ? 'webhook' : 'mock')
+        ).toLowerCase();
+
+        if (provider === 'webhook') {
+          return [webhook];
+        }
+        if (provider !== 'mock') {
+          logger.warn(
+            `NOTIFICATION_PROVIDER=${provider} invalido; usando provider mock`,
+          );
+        }
+        return [mockEmail];
+      },
+      inject: [ConfigService, MockEmailNotificador, WebhookNotificador],
     },
 
     // Use cases

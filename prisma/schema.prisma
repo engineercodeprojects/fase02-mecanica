@@ -137,7 +137,8 @@ model OrdemDeServico {
   veiculo   Veiculo  @relation(fields: [veiculoId], references: [id], onDelete: Cascade)
   usuario   Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
 
-  itensServico  ItemOrdemDeServicoServico[]
+  itensServico ItemOrdemDeServicoServico[]
+  auditLogs    OrdemDeServicoAuditLog[]
 
   @@map("ordem_de_servico")
 }
@@ -193,6 +194,22 @@ enum StatusOrdemDeServico {
   CANCELADA
 }
 
+model OrdemDeServicoAuditLog {
+  id               String   @id @default(uuid())
+  ordemDeServicoId String   @map("ordem_de_servico_id")
+  acao             String
+  statusAnterior   String?  @map("status_anterior")
+  statusNovo       String?  @map("status_novo")
+  usuarioId        String?  @map("usuario_id")
+  metadata         Json?
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  ordemDeServico OrdemDeServico @relation(fields: [ordemDeServicoId], references: [id], onDelete: Cascade)
+
+  @@index([ordemDeServicoId, createdAt])
+  @@map("ordem_de_servico_audit_log")
+}
+
 model Notificacao {
   id               String             @id @default(uuid())
   clienteId        String             @map("cliente_id")
@@ -215,6 +232,7 @@ model Notificacao {
 enum TipoNotificacao {
   ORCAMENTO_PRONTO
   OS_FINALIZADA
+  STATUS_OS_ALTERADO
 }
 
 enum CanalNotificacao {
