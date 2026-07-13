@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<title>Tech Challenge — Fase 2 · Oficina Mecânica · Entrega</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+    color: #1f2937; font-size: 12px; line-height: 1.5; margin: 0;
+  }
+  h1 { font-size: 24px; margin: 0 0 4px; color: #111827; }
+  h2 { font-size: 16px; margin: 22px 0 8px; color: #1e3a8a;
+       border-bottom: 2px solid #dbeafe; padding-bottom: 4px; }
+  h3 { font-size: 13px; margin: 16px 0 6px; color: #14532d; }
+  .sub { color: #6b7280; font-size: 12px; margin: 0 0 2px; }
+  .meta { color: #6b7280; font-size: 11px; }
+  a { color: #2563eb; text-decoration: none; word-break: break-all; }
+  .card {
+    border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px 14px;
+    margin: 8px 0; background: #f9fafb;
+  }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 11px; }
+  th, td { border: 1px solid #e5e7eb; padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background: #eff6ff; color: #1e3a8a; }
+  figure { margin: 10px 0 4px; text-align: center; page-break-inside: avoid; }
+  figure img { max-width: 100%; max-height: 235mm; border: 1px solid #e5e7eb; border-radius: 6px; }
+  figcaption { color: #6b7280; font-size: 10.5px; margin-top: 4px; }
+  .pagebreak { page-break-before: always; }
+  code { background: #f3f4f6; padding: 1px 4px; border-radius: 3px; font-size: 11px; }
+  ul { margin: 6px 0; padding-left: 18px; }
+  .badge { display:inline-block; background:#dcfce7; color:#14532d; border:1px solid #22c55e;
+           border-radius: 999px; padding: 2px 10px; font-size: 11px; font-weight:600; }
+  .todo { background:#fef9c3; border:1px solid #eab308; color:#713f12; border-radius:6px; padding:8px 12px; }
+</style>
+</head>
+<body>
+
+  <h1>Tech Challenge — Fase 2</h1>
+  <p class="sub">Sistema Integrado de Oficina Mecânica — Documento de Entrega</p>
+  <p class="meta">Stack: NestJS · TypeScript · Prisma · PostgreSQL · Docker · Kubernetes (kind) · Terraform · JWT · React/Vite</p>
+  <p><span class="badge">Execução 100% local — sem provisionamento em nuvem</span></p>
+
+  <h2>1. Repositório GitHub</h2>
+  <div class="card">
+    <p><strong>Repositório:</strong>
+      <a href="https://github.com/engineercodeprojects/fase02-mecanica">https://github.com/engineercodeprojects/fase02-mecanica</a>
+    </p>
+    <p><strong>Compartilhamento:</strong> repositório compartilhado com o usuário
+      <code>soat-architecture</code> (colaborador com acesso de leitura).</p>
+    <p class="meta">Documentação de arquitetura no repo:
+      <code>docs/arquitetura/arquitetura-local.md</code> e
+      <code>docs/arquitetura/arquitetura-fase2.md</code>.</p>
+  </div>
+
+  <h2>2. Vídeo de apresentação (≤ 15 min)</h2>
+  <div class="card">
+    <p class="todo"><strong>Link do vídeo:</strong>
+      _____________________________________________________
+      <br>(YouTube/Vimeo — substituir antes da entrega)</p>
+    <p class="meta">Roteiro sugerido: subida com <code>docker compose up -d</code>, consumo das
+      APIs via Swagger, fluxo da Ordem de Serviço, notificação por webhook, e deploy/HPA no
+      cluster <code>kind</code> local.</p>
+  </div>
+
+  <h2>3. Desenho da arquitetura</h2>
+  <p>A solução foi desenvolvida e executada <strong>100% localmente</strong>. Os componentes
+     rodam como containers na máquina do desenvolvedor, orquestrados por <strong>Docker
+     Compose</strong> (runtime principal) e, opcionalmente, em um <strong>cluster Kubernetes
+     local (<code>kind</code>)</strong> provisionado por Terraform. O único ator externo é um
+     webhook de terceiros usado para demonstrar notificações e aprovação de orçamento.</p>
+
+  <h3>3.1. Recursos escolhidos</h3>
+  <table>
+    <tr><th>Componente</th><th>Tecnologia</th><th>Porta local</th><th>Papel</th></tr>
+    <tr><td>Front Admin</td><td>React 18 + Vite + Tailwind (nginx)</td><td>8080</td><td>Painel para atendente/gestor/mecânico</td></tr>
+    <tr><td>Front Cliente</td><td>React 18 + Vite + Tailwind (nginx)</td><td>8081</td><td>Acompanhamento e aprovação pelo cliente</td></tr>
+    <tr><td>API</td><td>NestJS + TypeScript (DDD/Clean Architecture)</td><td>3000</td><td>Regras de negócio, REST, JWT, Swagger</td></tr>
+    <tr><td>Banco de dados</td><td>PostgreSQL 16 (volume <code>pgdata</code>)</td><td>5432</td><td>Persistência (ACID) via Prisma ORM</td></tr>
+    <tr><td>Orquestração</td><td>Docker Compose</td><td>—</td><td>Sobe os serviços e aplica migrations</td></tr>
+    <tr><td>Orquestração (opcional)</td><td>Kubernetes <code>kind</code> + Terraform</td><td>—</td><td>Deploy local com HPA (autoescala)</td></tr>
+    <tr><td>Integração externa</td><td>Webhook HTTP (HMAC-SHA256)</td><td>—</td><td>Notificação de status + aprovação de orçamento</td></tr>
+  </table>
+
+  <div class="pagebreak"></div>
+  <h3>3.2. Visão geral — runtime local (Docker Compose)</h3>
+  <figure>
+    <img src="arquitetura-local-1.png" alt="Runtime local via Docker Compose">
+    <figcaption>Fluxo: navegador → fronts (nginx) → API NestJS → PostgreSQL; webhook externo para notificação/aprovação.</figcaption>
+  </figure>
+
+  <div class="pagebreak"></div>
+  <h3>3.3. Componentes da aplicação (Clean Architecture + DDD)</h3>
+  <figure>
+    <img src="arquitetura-local-2.png" alt="Componentes da aplicação — Clean Architecture e DDD">
+    <figcaption>Camadas Infrastructure → Application → Domain, com dependências apontando para o domínio.</figcaption>
+  </figure>
+  <p class="meta"><strong>Bounded contexts:</strong> Atendimento (Cliente, Veículo, OrdemDeServico — aggregate root),
+     Catálogo (Serviço), Estoque (Produto), Autenticação (Usuário/JWT) e Notificação.</p>
+
+  <div class="pagebreak"></div>
+  <h3>3.4. Kubernetes local (opcional) — kind + Terraform</h3>
+  <figure>
+    <img src="arquitetura-local-3.png" alt="Kubernetes local com kind e Terraform">
+    <figcaption>Cluster kind provisionado por Terraform (2 estágios). Sem EKS/RDS — 100% local. HPA min 2 / máx 10.</figcaption>
+  </figure>
+  <p class="meta">CI/CD (<code>.github/workflows/ci-cd.yml</code>) sobe um cluster <code>kind</code> efêmero no
+     runner e prova o deploy ponta-a-ponta (testes → build → imagem → terraform apply → kubectl apply → smoke test).</p>
+
+</body>
+</html>

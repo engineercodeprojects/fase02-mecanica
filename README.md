@@ -31,6 +31,11 @@ Diagramas de **componentes da aplicação**, **infraestrutura provisionada** e
 
 ➡️ **[docs/arquitetura/arquitetura-fase2.md](docs/arquitetura/arquitetura-fase2.md)**
 
+Para a entrega em PDF (execução **100% local**, sem nuvem), com imagem pronta para
+exportar, veja também:
+
+➡️ **[docs/arquitetura/arquitetura-local.md](docs/arquitetura/arquitetura-local.md)**
+
 ### Entregáveis da Fase 2
 
 | Entregável | Onde |
